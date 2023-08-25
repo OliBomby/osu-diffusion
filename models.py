@@ -173,7 +173,7 @@ class FirstLayer(nn.Module):
             nn.Linear(in_channels * frequency_embedding_size + context_size, hidden_size, bias=True),
         )
         self.frequency_embedding_size = frequency_embedding_size
-        self.playfield_size = nn.Parameter(torch.tensor((512, 384)), requires_grad=False)
+        self.playfield_size = nn.Parameter(torch.tensor((512, 384), dtype=torch.float32), requires_grad=False)
 
     def forward(self, x, c):
         x_freq = position_sequence_embedding(x * self.playfield_size, self.frequency_embedding_size)
