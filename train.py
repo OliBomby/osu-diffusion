@@ -127,6 +127,7 @@ def main(args):
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     opt = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
 
     # Setup data:
     global_start = args.data_start
@@ -168,12 +169,14 @@ def main(args):
             c = c.to(device)
             y = y.to(device)
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
-            model_kwargs = dict(c=c, y=y)
-            loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
-            loss = loss_dict["loss"].mean()
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=args.use_amp):
+                model_kwargs = dict(c=c, y=y)
+                loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
+                loss = loss_dict["loss"].mean()
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
+            opt.zero_grad(set_to_none=True)
             update_ema(ema, model.module)
 
             # Log loss values:
@@ -202,6 +205,7 @@ def main(args):
                         "model": model.module.state_dict(),
                         "ema": ema.state_dict(),
                         "opt": opt.state_dict(),
+                        "scaler": scaler.state_dict(),
                         "args": args
                     }
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
@@ -232,5 +236,6 @@ if __name__ == "__main__":
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
     parser.add_argument("--seq-len", type=int, default=64)
+    parser.add_argument("--use-amp", type=bool, default=True)
     args = parser.parse_args()
     main(args)
