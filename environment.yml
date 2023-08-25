@@ -1,0 +1,10 @@
+name: osu-diffusion
+channels:
+  - pytorch
+  - nvidia
+dependencies:
+  - python >= 3.8
+  - pytorch >= 1.13
+  - pytorch-cuda=11.7
+  - pip:
+    - accelerate
