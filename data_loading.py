@@ -84,6 +84,7 @@ def beatmap_to_sequence(beatmap):
     # Get the hit objects
     hit_objects = beatmap.hit_objects(stacking=False)
     sequence = torch.concatenate([get_data(ho) for ho in hit_objects], 0)
+    sequence = torch.swapaxes(sequence, 0, 1)
 
     return sequence.float()
 
@@ -104,7 +105,7 @@ class BeatmapDatasetIterable:
         return self
 
     def __next__(self):
-        while self.current_seq_x is None or self.seq_index + self.seq_len > len(self.current_seq_x):
+        while self.current_seq_x is None or self.seq_index + self.seq_len > self.current_seq_x.shape[1]:
             if self.index >= len(self.beatmap_files):
                 raise StopIteration
 
@@ -115,19 +116,19 @@ class BeatmapDatasetIterable:
             self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
 
             seq_no_embed = beatmap_to_sequence(beatmap)
-            self.current_seq_x = seq_no_embed[:, :2]
+            self.current_seq_x = seq_no_embed[:2, :]
             self.current_seq_y = torch.concatenate(
                 [
-                    timestep_embedding(seq_no_embed[:, 2], 128, 36000),
-                    seq_no_embed[:, 3:]
-                ], 1)
+                    timestep_embedding(seq_no_embed[2, :], 128, 36000).T,
+                    seq_no_embed[3:, :]
+                ], 0)
 
             self.seq_index = 0
             self.index += 1
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
-        x = self.current_seq_x[self.seq_index:self.seq_index + self.seq_len]
-        y = self.current_seq_y[self.seq_index:self.seq_index + self.seq_len]
+        x = self.current_seq_x[:, self.seq_index:self.seq_index + self.seq_len]
+        y = self.current_seq_y[:, self.seq_index:self.seq_index + self.seq_len]
         self.seq_index += self.stride
         return x, y, self.current_idx
 
@@ -215,16 +216,18 @@ if __name__ == '__main__':
     )
 
     import matplotlib.pyplot as plt
-    for batch in dataloader:
-        print(batch[0].shape, batch[1].shape, batch[2].shape)
-        batch_pos_emb = position_sequence_embedding(batch[0] * playfield_size, 128)
+    for x, c, y in dataloader:
+        x = torch.swapaxes(x, 1, 2)   # (N, T, C)
+        c = torch.swapaxes(c, 1, 2)   # (N, T, E)
+        print(x.shape, c.shape, y.shape)
+        batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
         print(batch_pos_emb.shape)
 
         for j in range(batch_size):
             fig, axs = plt.subplots(2, figsize=(10, 5))
             axs[0].imshow(batch_pos_emb[j])
-            axs[1].imshow(batch[1][j])
-            print(batch[2][j])
+            axs[1].imshow(c[j])
+            print(y[j])
             plt.show()
         break
 

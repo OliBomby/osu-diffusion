@@ -248,18 +248,21 @@ class DiT(nn.Module):
     def forward(self, x, t, c, y):
         """
         Forward pass of DiT.
-        x: (N, T, C) tensor of sequence inputs
+        x: (N, C, T) tensor of sequence inputs
         t: (N) tensor of diffusion timesteps
-        c: (N, T, E) tensor of sequence context
+        c: (N, E, T) tensor of sequence context
         y: (N) tensor of class labels
         """
+        x = torch.swapaxes(x, 1, 2)   # (N, T, C)
+        c = torch.swapaxes(c, 1, 2)   # (N, T, E)
         x = self.xc_embedder(x, c)               # (N, T, D), where T = seq_len
         t = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y, self.training)    # (N, D)
         c = t + y                                # (N, D)
         for block in self.blocks:
             x = block(x, c)                      # (N, T, D)
-        x = self.final_layer(x, c)                # (N, T, out_channels)
+        x = self.final_layer(x, c)               # (N, T, out_channels)
+        x = torch.swapaxes(x, 1, 2)   # (N, out_channels, T)
         return x
 
     def forward_with_cfg(self, x, t, c, y, cfg_scale):
