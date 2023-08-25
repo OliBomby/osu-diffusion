@@ -3,6 +3,7 @@ import os.path
 import random
 import pickle
 from datetime import timedelta
+from pathlib import Path
 
 from slider import Position
 from slider.beatmap import Beatmap, HitObject, Slider, Spinner
@@ -84,7 +85,7 @@ def beatmap_to_sequence(beatmap):
     hit_objects = beatmap.hit_objects(stacking=False)
     sequence = torch.concatenate([get_data(ho) for ho in hit_objects], 0)
 
-    return sequence
+    return sequence.float()
 
 
 class BeatmapDatasetIterable:
@@ -174,8 +175,9 @@ def worker_init_fn(worker_id):
 
 
 def get_processed_data_loader(dataset_path, start, end, seq_len, stride, batch_size, num_workers=0, shuffle=False, pin_memory=False, drop_last=False):
-    with open('beatmap_idx.pickle', 'rb') as handle:
-        beatmap_idx = pickle.load(handle)
+    p = Path(__file__).with_name('beatmap_idx.pickle')
+    with p.open('rb') as f:
+        beatmap_idx = pickle.load(f)
 
     dataset = BeatmapDataset(
         dataset_path=dataset_path,

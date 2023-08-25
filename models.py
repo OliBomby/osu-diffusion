@@ -225,7 +225,6 @@ class DiT(nn.Module):
 
         # Initialize position embedding MLP:
         nn.init.normal_(self.xc_embedder.mlp[0].weight, std=0.02)
-        nn.init.normal_(self.xc_embedder.mlp[2].weight, std=0.02)
 
         # Initialize label embedding table:
         nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)

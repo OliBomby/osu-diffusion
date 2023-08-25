@@ -147,7 +147,7 @@ def main(args):
         pin_memory=True,
         drop_last=True
     )
-    logger.info(f"Dataset contains {len(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
+    logger.info(f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
 
     # Prepare models for training:
     update_ema(ema, model.module, decay=0)  # Ensure EMA is initialized with synced weights
