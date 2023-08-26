@@ -258,10 +258,10 @@ class DiT(nn.Module):
         x = self.xc_embedder(x, c)               # (N, T, D), where T = seq_len
         t = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y, self.training)    # (N, D)
-        c = t + y                                # (N, D)
+        b = t + y                                # (N, D)
         for block in self.blocks:
-            x = block(x, c)                      # (N, T, D)
-        x = self.final_layer(x, c)               # (N, T, out_channels)
+            x = block(x, b)                      # (N, T, D)
+        x = self.final_layer(x, b)               # (N, T, out_channels)
         x = torch.swapaxes(x, 1, 2)   # (N, out_channels, T)
         return x
 
