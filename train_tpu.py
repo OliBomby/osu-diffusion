@@ -121,8 +121,6 @@ def train(args, wrapped_model):
             train_steps += 1
             tracker.add(batch_size)
             if train_steps % args.log_every == 0:
-                # Measure training speed:
-                xm.synchronize()
                 # Reduce loss history over all processes:
                 avg_loss = torch.tensor(running_loss / log_steps, device=device)
                 reduce_avg_loss = xm.all_reduce(xm.REDUCE_SUM, avg_loss, 1 / xm.xrt_world_size())
