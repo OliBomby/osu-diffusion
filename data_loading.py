@@ -133,8 +133,31 @@ class BeatmapDatasetIterable:
         return x, y, self.current_idx
 
 
+class InterleavingBeatmapDatasetIterable:
+    def __init__(self, beatmap_files, beatmap_idx, seq_len, stride, cycle_length):
+        per_worker = int(math.ceil(len(beatmap_files) / float(cycle_length)))
+        self.workers = [BeatmapDatasetIterable(beatmap_files[i * per_worker:min(len(beatmap_files), (i + 1) * per_worker)], beatmap_idx, seq_len, stride) for i in range(cycle_length)]
+        self.cycle_length = cycle_length
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        num = len(self.workers)
+        for _ in range(num):
+            try:
+                self.index = self.index % len(self.workers)
+                item = self.workers[self.index].__next__()
+                self.index += 1
+                return item
+            except StopIteration:
+                self.workers.remove(self.workers[self.index])
+        raise StopIteration
+
+
 class BeatmapDataset(IterableDataset):
-    def __init__(self, dataset_path, beatmap_idx, start, end, seq_len, stride=1, shuffle=False):
+    def __init__(self, dataset_path, beatmap_idx, start, end, seq_len, stride=1, cycle_length=1, shuffle=False):
         super(BeatmapDataset).__init__()
         self.dataset_path = dataset_path
         self.beatmap_idx = beatmap_idx
@@ -142,6 +165,7 @@ class BeatmapDataset(IterableDataset):
         self.end = end
         self.seq_len = seq_len
         self.stride = stride
+        self.cycle_length = cycle_length
         self.shuffle = shuffle
 
     def _get_beatmap_files(self):
@@ -160,6 +184,9 @@ class BeatmapDataset(IterableDataset):
         if self.shuffle:
             random.shuffle(beatmap_files)
 
+        if self.cycle_length > 1:
+            return InterleavingBeatmapDatasetIterable(beatmap_files, self.beatmap_idx, self.seq_len, self.stride, self.cycle_length)
+
         return BeatmapDatasetIterable(beatmap_files, self.beatmap_idx, self.seq_len, self.stride)
 
 
@@ -175,7 +202,7 @@ def worker_init_fn(worker_id):
     dataset.end = min(dataset.start + per_worker, overall_end)
 
 
-def get_processed_data_loader(dataset_path, start, end, seq_len, stride, batch_size, num_workers=0, shuffle=False, pin_memory=False, drop_last=False):
+def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle_length=1, batch_size=1, num_workers=0, shuffle=False, pin_memory=False, drop_last=False):
     p = Path(__file__).with_name('beatmap_idx.pickle')
     with p.open('rb') as f:
         beatmap_idx = pickle.load(f)
@@ -187,6 +214,7 @@ def get_processed_data_loader(dataset_path, start, end, seq_len, stride, batch_s
         end=end,
         seq_len=seq_len,
         stride=stride,
+        cycle_length=cycle_length,
         shuffle=shuffle
     )
     dataloader = DataLoader(
@@ -202,17 +230,20 @@ def get_processed_data_loader(dataset_path, start, end, seq_len, stride, batch_s
 
 
 if __name__ == '__main__':
-    seq_len = 25
-    batch_size = 1  # Set the desired batch size
+    batch_size = 32
+    num_workers = 4
     dataloader = get_processed_data_loader(
-        "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS10548",
-        0,
-        10548,
-        seq_len,
-        16,
-        batch_size,
-        0,
-        False
+        dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS10548",
+        start = 0,
+        end = 548,
+        seq_len = 64,
+        stride = 16,
+        cycle_length = batch_size,
+        batch_size = batch_size,
+        num_workers = num_workers,
+        shuffle = False,
+        pin_memory = False,
+        drop_last = True
     )
 
     import matplotlib.pyplot as plt
@@ -222,13 +253,14 @@ if __name__ == '__main__':
         print(x.shape, c.shape, y.shape)
         batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
         print(batch_pos_emb.shape)
+        print(y)
 
-        for j in range(batch_size):
-            fig, axs = plt.subplots(2, figsize=(10, 5))
-            axs[0].imshow(batch_pos_emb[j])
-            axs[1].imshow(c[j])
-            print(y[j])
-            plt.show()
+        # for j in range(batch_size):
+            # fig, axs = plt.subplots(2, figsize=(10, 5))
+            # axs[0].imshow(batch_pos_emb[j])
+            # axs[1].imshow(c[j])
+            # print(y[j])
+            # plt.show()
         break
 
     # import time

@@ -135,14 +135,16 @@ def main(args):
     per_rank = int(np.ceil((global_end - global_start) / float(dist.get_world_size())))
     dataset_start = global_start + rank * per_rank
     dataset_end = min(dataset_start + per_rank, global_end)
+    batch_size = int(args.global_batch_size // dist.get_world_size())
 
     loader = get_processed_data_loader(
         dataset_path=args.data_path,
         start=dataset_start,
         end=dataset_end,
         seq_len=args.seq_len,
-        stride=16,
-        batch_size=int(args.global_batch_size // dist.get_world_size()),
+        stride=args.stride,
+        cycle_length=batch_size,
+        batch_size=batch_size,
         num_workers=args.num_workers,
         shuffle=True,
         pin_memory=True,
@@ -236,6 +238,7 @@ if __name__ == "__main__":
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
     parser.add_argument("--seq-len", type=int, default=64)
+    parser.add_argument("--stride", type=int, default=16)
     parser.add_argument("--use-amp", type=bool, default=True)
     args = parser.parse_args()
     main(args)
