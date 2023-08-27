@@ -61,11 +61,11 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def create_logger(logging_dir):
+def create_logger(logging_dir, rank):
     """
     Create a logger that writes to a log file and stdout.
     """
-    if dist.get_rank() == 0:  # real logger
+    if rank == 0:  # real logger
         logging.basicConfig(
             level=logging.INFO,
             format='[\033[34m%(asctime)s\033[0m] %(message)s',
@@ -91,13 +91,14 @@ def main(args):
 
     # Setup DDP:
     dist.init_process_group("nccl")
+    world_size = dist.get_world_size()
     assert args.global_batch_size % dist.get_world_size() == 0, f"Batch size must be divisible by world size."
     rank = dist.get_rank()
     device = rank % torch.cuda.device_count()
-    seed = args.global_seed * dist.get_world_size() + rank
+    seed = args.global_seed * world_size + rank
     torch.manual_seed(seed)
     torch.cuda.set_device(device)
-    print(f"Starting rank={rank}, seed={seed}, world_size={dist.get_world_size()}.")
+    print(f"Starting rank={rank}, seed={seed}, world_size={world_size}.")
 
     # Setup an experiment folder:
     if rank == 0:
@@ -107,11 +108,11 @@ def main(args):
         experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
         checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
-        logger = create_logger(experiment_dir)
+        logger = create_logger(experiment_dir, rank)
         logger.info(f"Experiment directory created at {experiment_dir}")
     else:
         checkpoint_dir = ""
-        logger = create_logger(None)
+        logger = create_logger(None, rank)
 
     # Create model:
     model = DiT_models[args.model](
@@ -132,10 +133,10 @@ def main(args):
     # Setup data:
     global_start = args.data_start
     global_end = args.data_end
-    per_rank = int(np.ceil((global_end - global_start) / float(dist.get_world_size())))
+    per_rank = int(np.ceil((global_end - global_start) / float(world_size)))
     dataset_start = global_start + rank * per_rank
     dataset_end = min(dataset_start + per_rank, global_end)
-    batch_size = int(args.global_batch_size // dist.get_world_size())
+    batch_size = int(args.global_batch_size // world_size)
 
     loader = get_processed_data_loader(
         dataset_path=args.data_path,
@@ -193,7 +194,7 @@ def main(args):
                 # Reduce loss history over all processes:
                 avg_loss = torch.tensor(running_loss / log_steps, device=device)
                 dist.all_reduce(avg_loss, op=dist.ReduceOp.SUM)
-                avg_loss = avg_loss.item() / dist.get_world_size()
+                avg_loss = avg_loss.item() / world_size
                 logger.info(f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
                 # Reset monitoring variables:
                 running_loss = 0
