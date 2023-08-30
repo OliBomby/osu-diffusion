@@ -202,14 +202,17 @@ def worker_init_fn(worker_id):
     dataset.end = min(dataset.start + per_worker, overall_end)
 
 
-def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle_length=1, batch_size=1, num_workers=0, shuffle=False, pin_memory=False, drop_last=False):
+def get_beatmap_idx():
     p = Path(__file__).with_name('beatmap_idx.pickle')
     with p.open('rb') as f:
         beatmap_idx = pickle.load(f)
+    return beatmap_idx
 
+
+def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle_length=1, batch_size=1, num_workers=0, shuffle=False, pin_memory=False, drop_last=False):
     dataset = BeatmapDataset(
         dataset_path=dataset_path,
-        beatmap_idx=beatmap_idx,
+        beatmap_idx=get_beatmap_idx(),
         start=start,
         end=end,
         seq_len=seq_len,
