@@ -114,7 +114,7 @@ def main(args):
         context_size=context_size
     )
     # Note that parameter initialization is done within the DiT constructor
-    ema = deepcopy(model).to(device)  # Create an EMA of the model for use after training
+    ema: torch.nn.Module = deepcopy(model).to(device)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
     model = DDP(model.to(device), device_ids=[rank])
     diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
@@ -151,6 +151,16 @@ def main(args):
     update_ema(ema, model.module, decay=0)  # Ensure EMA is initialized with synced weights
     model.train()  # important! This enables embedding dropout for classifier-free guidance
     ema.eval()  # EMA model should always be in eval mode
+
+    # Load checkpoint
+    if args.ckpt is not None:
+        assert os.path.isfile(args.ckpt), f'Could not find DiT checkpoint at {args.ckpt}'
+        checkpoint = torch.load(args.ckpt, map_location=lambda storage, loc: storage)
+        model.module.load_state_dict(checkpoint["model"])
+        ema.load_state_dict(checkpoint["ema"])
+        opt.load_state_dict(checkpoint["opt"])
+        scaler.load_state_dict(checkpoint["scaler"])
+        logger.info(f"Restored from checkpoint at {args.ckpt}")
 
     # Variables for monitoring/logging purposes:
     train_steps = 0
@@ -235,5 +245,6 @@ if __name__ == "__main__":
     parser.add_argument("--seq-len", type=int, default=64)
     parser.add_argument("--stride", type=int, default=16)
     parser.add_argument("--use-amp", type=bool, default=True)
+    parser.add_argument("--ckpt", type=str, default=None)
     args = parser.parse_args()
     main(args)
