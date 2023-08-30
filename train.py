@@ -84,7 +84,7 @@ def main(args):
     assert torch.cuda.is_available(), "Training currently requires at least one GPU."
 
     # Setup DDP:
-    dist.init_process_group("nccl")
+    dist.init_process_group(args.dist)
     world_size = dist.get_world_size()
     assert args.global_batch_size % dist.get_world_size() == 0, f"Batch size must be divisible by world size."
     rank = dist.get_rank()
@@ -246,5 +246,6 @@ if __name__ == "__main__":
     parser.add_argument("--stride", type=int, default=16)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--ckpt", type=str, default=None)
+    parser.add_argument("--dist", type=str, default="nccl")
     args = parser.parse_args()
     main(args)
