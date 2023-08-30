@@ -53,8 +53,8 @@ for i in range(0, 10548):
         beatmap = slider.Beatmap.from_path(beatmap_path + ".osu")
         beatmap_metadata = metadata["Beatmaps"][beatmap_name]
         beatmap_df.loc[idx] = [
-            beatmap.beatmap_id,
-            beatmap.beatmap_set_id,
+            beatmap_metadata["BeatmapId"],
+            metadata["BeatmapSetId"],
             i,
             j,
             track_name,
