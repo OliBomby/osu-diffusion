@@ -138,7 +138,7 @@ def main(args):
         end=dataset_end,
         seq_len=args.seq_len,
         stride=args.stride,
-        cycle_length=batch_size,
+        cycle_length=batch_size // 2,
         batch_size=batch_size,
         num_workers=args.num_workers,
         shuffle=True,

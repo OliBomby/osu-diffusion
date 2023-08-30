@@ -15,13 +15,15 @@ from positional_embedding import timestep_embedding, position_sequence_embedding
 
 
 playfield_size = torch.tensor((512, 384))
-context_size = 14 + 128
+context_size = 14 + 128 * 2
 
 
-def create_datapoint(time: timedelta, pos: Position, datatype):
+def create_datapoint(time: timedelta, pos: Position, datatype, last_pos: Position):
+    dist = math.sqrt((pos.x - last_pos.x)**2 + (pos.y - last_pos.y)**2)
     pos_enc = torch.tensor(pos) / playfield_size
-    type_enc = torch.zeros(15)
-    type_enc[0] = time.total_seconds() * 10
+    type_enc = torch.zeros(16)
+    type_enc[0] = time.total_seconds() * 1000
+    type_enc[1] = dist
     type_enc[datatype + 1] = 1
 
     return torch.concatenate([pos_enc, type_enc], 0)
@@ -36,54 +38,70 @@ def repeat_type(repeat):
         return 4
 
 
-def append_control_points(datapoints, ho: Slider, datatype):
+def append_control_points(datapoints, ho: Slider, datatype, duration, last_pos: Position):
     control_point_count = len(ho.curve.points)
-    duration = ho.end_time - ho.time
 
     for i in range(1, control_point_count - 1):
         time = ho.time + i / (control_point_count - 1) * duration
         pos = ho.curve.points[i]
-        datapoints.append(create_datapoint(time, pos, datatype))
+        datapoints.append(create_datapoint(time, pos, datatype, last_pos))
+        last_pos = pos
+
+    return last_pos
 
 
-def get_data(ho: HitObject):
+def get_data(ho: HitObject, last_pos: Position):
     if isinstance(ho, Slider) and len(ho.curve.points) < 100:
-        datapoints = [create_datapoint(ho.time, ho.position, 3)]
+        datapoints = [create_datapoint(ho.time, ho.position, 3, last_pos)]
+        last_pos = ho.position
+
+        assert ho.repeat >= 1
+        duration = (ho.end_time - ho.time) / ho.repeat
 
         if isinstance(ho.curve, Linear):
-            append_control_points(datapoints, ho, 7)
+            last_pos = append_control_points(datapoints, ho, 7, duration, last_pos)
         elif isinstance(ho.curve, Catmull):
-            append_control_points(datapoints, ho, 6)
+            last_pos = append_control_points(datapoints, ho, 6, duration, last_pos)
         elif isinstance(ho.curve, Perfect):
-            append_control_points(datapoints, ho, 5)
+            last_pos = append_control_points(datapoints, ho, 5, duration, last_pos)
         elif isinstance(ho.curve, MultiBezier):
             control_point_count = len(ho.curve.points)
-            duration = ho.end_time - ho.time
 
             for i in range(1, control_point_count - 1):
                 time = ho.time + i / (control_point_count - 1) * duration
                 pos = ho.curve.points[i]
 
                 if pos == ho.curve.points[i + 1]:
-                    datapoints.append(create_datapoint(time, pos, 7))
+                    datapoints.append(create_datapoint(time, pos, 7, last_pos))
+                    last_pos = pos
                 elif pos != ho.curve.points[i - 1]:
-                    datapoints.append(create_datapoint(time, pos, 4))
+                    datapoints.append(create_datapoint(time, pos, 4, last_pos))
+                    last_pos = pos
 
-        datapoints.append(create_datapoint(ho.end_time, ho.curve.points[-1], 8))
-        datapoints.append(create_datapoint(ho.end_time, ho.curve(1), 9 + repeat_type(ho.repeat)))
+        datapoints.append(create_datapoint(ho.time + duration, ho.curve.points[-1], 8, last_pos))
+        last_pos = ho.curve.points[-1]
 
-        return torch.stack(datapoints, 0)
+        slider_end_pos = ho.curve(1)
+        datapoints.append(create_datapoint(ho.end_time, slider_end_pos, 9 + repeat_type(ho.repeat), last_pos))
+
+        return torch.stack(datapoints, 0), slider_end_pos
 
     if isinstance(ho, Spinner):
-        return torch.stack((create_datapoint(ho.time, ho.position, 1), create_datapoint(ho.end_time, ho.position, 2)), 0)
+        return torch.stack((create_datapoint(ho.time, ho.position, 1, last_pos), create_datapoint(ho.end_time, ho.position, 2, ho.position)), 0), ho.position
 
-    return create_datapoint(ho.time, ho.position, 0).unsqueeze(0)
+    return create_datapoint(ho.time, ho.position, 0, last_pos).unsqueeze(0), ho.position
 
 
 def beatmap_to_sequence(beatmap):
     # Get the hit objects
     hit_objects = beatmap.hit_objects(stacking=False)
-    sequence = torch.concatenate([get_data(ho) for ho in hit_objects], 0)
+    data_chunks = []
+    last_pos = Position(256, 192)
+    for ho in hit_objects:
+        data_chunk, last_pos = get_data(ho, last_pos)
+        data_chunks.append(data_chunk)
+
+    sequence = torch.concatenate(data_chunks, 0)
     sequence = torch.swapaxes(sequence, 0, 1)
 
     return sequence.float()
@@ -119,8 +137,9 @@ class BeatmapDatasetIterable:
             self.current_seq_x = seq_no_embed[:2, :]
             self.current_seq_y = torch.concatenate(
                 [
-                    timestep_embedding(seq_no_embed[2, :], 128, 36000).T,
-                    seq_no_embed[3:, :]
+                    timestep_embedding(seq_no_embed[2, :] / 100, 128, 36000).T,
+                    timestep_embedding(seq_no_embed[3, :], 128).T,
+                    seq_no_embed[4:, :]
                 ], 0)
 
             self.seq_index = 0
@@ -233,15 +252,15 @@ def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle
 
 
 if __name__ == '__main__':
-    batch_size = 32
-    num_workers = 4
+    batch_size = 256
+    num_workers = 16
     dataloader = get_processed_data_loader(
         dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS10548",
         start = 0,
-        end = 548,
+        end = 10548,
         seq_len = 64,
         stride = 16,
-        cycle_length = batch_size,
+        cycle_length = 1,
         batch_size = batch_size,
         num_workers = num_workers,
         shuffle = False,
@@ -249,28 +268,28 @@ if __name__ == '__main__':
         drop_last = True
     )
 
-    import matplotlib.pyplot as plt
-    for x, c, y in dataloader:
-        x = torch.swapaxes(x, 1, 2)   # (N, T, C)
-        c = torch.swapaxes(c, 1, 2)   # (N, T, E)
-        print(x.shape, c.shape, y.shape)
-        batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
-        print(batch_pos_emb.shape)
-        print(y)
+    # import matplotlib.pyplot as plt
+    # for x, c, y in dataloader:
+    #     x = torch.swapaxes(x, 1, 2)   # (N, T, C)
+    #     c = torch.swapaxes(c, 1, 2)   # (N, T, E)
+    #     print(x.shape, c.shape, y.shape)
+    #     batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
+    #     print(batch_pos_emb.shape)
+    #     print(y)
+    #
+    #     for j in range(batch_size):
+    #         fig, axs = plt.subplots(2, figsize=(10, 5))
+    #         axs[0].imshow(batch_pos_emb[j])
+    #         axs[1].imshow(c[j])
+    #         print(y[j])
+    #         plt.show()
+    #     break
 
-        # for j in range(batch_size):
-            # fig, axs = plt.subplots(2, figsize=(10, 5))
-            # axs[0].imshow(batch_pos_emb[j])
-            # axs[1].imshow(c[j])
-            # print(y[j])
-            # plt.show()
-        break
-
-    # import time
-    # import tqdm
-    # count = 0
-    # start = time.time()
-    # for f in tqdm.tqdm(dataloader, total=76200, smoothing=0.1):
-    #     count += 1
-    #     # print(f"\r{count}, {count / (time.time() - start)} per second, beatmap index {torch.max(f[1])}", end='')
+    import time
+    import tqdm
+    count = 0
+    start = time.time()
+    for f in tqdm.tqdm(dataloader, total=76200, smoothing=0.01):
+        count += 1
+        # print(f"\r{count}, {count / (time.time() - start)} per second, beatmap index {torch.max(f[1])}", end='')
 

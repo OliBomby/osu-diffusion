@@ -89,7 +89,7 @@ def main(args):
         objects = []
         curr_object = None
         for j in range(seq_len):
-            time = timedelta(seconds=float(seq_no_embed[2, j] / 10))
+            time = timedelta(seconds=float(seq_no_embed[2, j] / 1000))
             type_index = int(torch.argmax(seq_no_embed[3:, j]))
             x = int(round(float(samples[i, 0, j] * 512)))
             y = int(round(float(samples[i, 1, j] * 384)))
