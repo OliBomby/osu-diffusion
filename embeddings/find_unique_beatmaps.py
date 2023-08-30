@@ -11,11 +11,15 @@ def get_maps(mapper):
     return df[((df["Creator"] == mapper) | df["Version"].str.contains(mapper)) & ~df["Version"].str.contains(regex)]
 
 
-# mapper = input("Input mapper name: ")
+mapper = input("Input mapper name: ")
 mapper = "Sotarks"
 
 df = pd.read_pickle("beatmap_df.pkl")
-ckpt = torch.load("D:\\DiT-B-0130000.pt")
+# print("Number of unique beatmap IDs = %s" % df["BeatmapID"].nunique())
+# id_counts = df["BeatmapID"].value_counts()
+# duplicated = id_counts[id_counts > 1]
+# print(df[df["BeatmapID"].isin(duplicated.index)])
+ckpt = torch.load("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\DiT-B-0130000.pt")
 
 maps = get_maps(mapper)
 print(f"Found {len(maps)} beatmaps.")
