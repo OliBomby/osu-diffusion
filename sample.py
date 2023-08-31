@@ -1,10 +1,16 @@
 """
 Sample new images from a pre-trained DiT.
 """
+import numpy as np
 import torch
+from matplotlib import animation
 from slider import Beatmap
+from slider.beatmap import Slider
+import matplotlib.pyplot as plt
+from slider.curve import Perfect, Catmull, Linear
 
 from export.create_beatmap import create_beatmap
+from export.slider_path import SliderPath
 from positional_embedding import timestep_embedding
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -75,17 +81,42 @@ def main(args):
     model_kwargs = dict(c=c, y=y, cfg_scale=args.cfg_scale)
 
     # Sample images:
-    samples = diffusion.p_sample_loop(
-        model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
-    )
-    samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-    sampled_seq = torch.concatenate([samples, seq_no_embed[2:].repeat(n, 1, 1)])
+    sampled_seq = None
+    if args.plot_time is not None:
+        fig, ax = plt.subplots()
+        artists = []
 
-    # Save and display images:
+        for samples in diffusion.p_sample_loop_progressive(model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device):
+            samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+            sampled_seq = torch.concatenate([samples, seq_no_embed[2:].repeat(n, 1, 1)])
+            new_beatmap = create_beatmap(sampled_seq[0], beatmap, f"Diffusion {args.style_id}")
+            artists.append(plot_beatmap(ax, new_beatmap, args.plot_time))
+
+        ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=200)
+        ani.save(filename=os.path.join("results", args.beatmap, "animation.gif"), writer="pillow")
+    else:
+        samples = diffusion.p_sample_loop(model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device)
+        samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+        sampled_seq = torch.concatenate([samples, seq_no_embed[2:].repeat(n, 1, 1)])
+
+    # Save beatmaps:
     for i in range(n):
         new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
         new_beatmap.write_path(os.path.join("results", args.beatmap, f"result{i}.osu"))
 
+
+def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time):
+    hit_objects = beatmap.hit_objects(spinners=False)
+    windowed = [ho for ho in hit_objects if time - 1000 < ho.time < time + 1000]
+    artists = []
+    for ho in windowed:
+        if isinstance(ho, Slider):
+            path = SliderPath("PerfectCurve" if ho.curve is Perfect else ("CatmulL" if ho.curve is Catmull else ("Linear" if ho.curve is Linear else "Bezier")), np.array(ho.curve.points))
+            p = np.vstack(path.calculatedPath)
+            artists.append(ax.plot(p[:, 0], p[:, 1], color="green"))
+    p = np.array([ho.position for ho in hit_objects])
+    artists.append(ax.scatter(p[0, :], p[1, :], beatmap.cs()))
+    return artists
 
 
 if __name__ == "__main__":
@@ -100,5 +131,6 @@ if __name__ == "__main__":
     parser.add_argument("--seq-len", type=int, default=64)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
+    parser.add_argument("--plot-time", type=float, default=None)
     args = parser.parse_args()
     main(args)
