@@ -1,14 +1,10 @@
 """
 Sample new images from a pre-trained DiT.
 """
-from datetime import timedelta
-
-import numpy as np
 import torch
-from slider import Beatmap, Position
-from slider.beatmap import Circle, Slider, Spinner, Curve
-from slider.curve import MultiBezier, Perfect, Catmull
+from slider import Beatmap
 
+from export.create_beatmap import create_beatmap
 from positional_embedding import timestep_embedding
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -83,50 +79,12 @@ def main(args):
         model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device
     )
     samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+    sampled_seq = torch.concatenate([samples, seq_no_embed[2:].repeat(n, 1, 1)])
 
     # Save and display images:
     for i in range(n):
-        objects = []
-        curr_object = None
-        for j in range(seq_len):
-            time = timedelta(seconds=float(seq_no_embed[2, j] / 1000))
-            type_index = int(torch.argmax(seq_no_embed[3:, j]))
-            x = int(round(float(samples[i, 0, j] * 512)))
-            y = int(round(float(samples[i, 1, j] * 384)))
-            pos = Position(x, y)
-            if type_index == 0:
-                objects.append(Circle(pos, time, 0))
-            elif type_index == 1:
-                curr_object = Spinner(pos, time, 0, time)
-            elif type_index == 2 and isinstance(curr_object, Spinner):
-                curr_object.end_time = time
-                objects.append(curr_object)
-            elif type_index == 3:
-                curr_object = Slider(pos, time, time, 0, MultiBezier([pos], 0), 0, 0, 0, 0, 0, 0, [], [])
-            elif type_index == 4 and isinstance(curr_object, Slider):
-                curr_object.curve.points.append(pos)
-            elif type_index == 5 and isinstance(curr_object, Slider):
-                prev_points = curr_object.curve.points
-                curr_object.curve = Perfect([Position(0, 0), Position(1, 0), Position(0, 1)], 0)
-                curr_object.curve.points = prev_points + [pos]
-            elif type_index == 6 and isinstance(curr_object, Slider):
-                curr_object.curve = Catmull(curr_object.curve.points, 0)
-                curr_object.curve.points.append(pos)
-            elif type_index == 7 and isinstance(curr_object, Slider):
-                curr_object.curve.points.append(pos)
-                curr_object.curve.points.append(pos)
-            elif type_index == 8 and isinstance(curr_object, Slider):
-                curr_object.curve.points.append(pos)
-            elif type_index >= 9 and isinstance(curr_object, Slider):
-                curr_object.end_time = time
-                curr_object.repeat = type_index - 8
-                curr_object.length = np.sqrt((curr_object.position.x - x)**2 + (curr_object.position.y - y)**2)
-                curr_object.edge_sounds = [0] * curr_object.repeat
-                curr_object.edge_additions = ['0:0'] * curr_object.repeat
-                objects.append(curr_object)
-
-        for ho in objects:
-            print(ho.pack())
+        new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
+        new_beatmap.write_path(os.path.join("results", args.beatmap, f"result{i}.osu"))
 
 
 

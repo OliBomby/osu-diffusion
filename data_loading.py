@@ -11,7 +11,7 @@ import torch
 from slider.curve import Linear, Catmull, Perfect, MultiBezier
 from torch.utils.data import IterableDataset, DataLoader
 
-from positional_embedding import timestep_embedding, position_sequence_embedding
+from positional_embedding import timestep_embedding
 
 
 playfield_size = torch.tensor((512, 384))
