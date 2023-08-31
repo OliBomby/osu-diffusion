@@ -24,7 +24,7 @@ def create_datapoint(time: timedelta, pos: Position, datatype, last_pos: Positio
     type_enc = torch.zeros(16)
     type_enc[0] = time.total_seconds() * 1000
     type_enc[1] = dist
-    type_enc[datatype + 1] = 1
+    type_enc[datatype + 2] = 1
 
     return torch.concatenate([pos_enc, type_enc], 0)
 

@@ -1,6 +1,6 @@
 from numpy.linalg import norm
 import numpy as np
-import path_approximator
+import export.path_approximator as path_approximator
 
 
 def binary_search(array, target):
@@ -17,6 +17,7 @@ def binary_search(array, target):
             lower = x
         elif target < val:
             upper = x
+    return ~lower
 
 
 class SliderPath:

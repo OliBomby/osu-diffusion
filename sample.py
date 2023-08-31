@@ -1,25 +1,25 @@
 """
 Sample new images from a pre-trained DiT.
 """
-import numpy as np
 import torch
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+from datetime import timedelta
+import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib import animation
+import argparse
+import os
 from slider import Beatmap
 from slider.beatmap import Slider
-import matplotlib.pyplot as plt
 from slider.curve import Perfect, Catmull, Linear
 
 from export.create_beatmap import create_beatmap
 from export.slider_path import SliderPath
 from positional_embedding import timestep_embedding
-
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
 from diffusion import create_diffusion
 from models import DiT_models
-import argparse
-import os
-
 from data_loading import context_size, beatmap_to_sequence, get_beatmap_idx
 
 
@@ -40,19 +40,27 @@ def main(args):
     # Load beatmap to sample coordinates for
     beatmap = Beatmap.from_path(args.beatmap)
 
+    result_dir = os.path.join("results", str(beatmap.beatmap_id))
+    os.makedirs(result_dir, exist_ok=True)
+
     seq_no_embed = beatmap_to_sequence(beatmap)
+
+    if args.plot_time is not None:
+        seq_no_embed = seq_no_embed[:, (seq_no_embed[2] > args.plot_time - 1000) & (seq_no_embed[2] < args.plot_time + 1000)]
+        print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
+
     seq_len = seq_no_embed.shape[1]
     seq_x = seq_no_embed[:2, :]
     seq_y = torch.concatenate(
         [
             timestep_embedding(seq_no_embed[2, :], 128, 36000).T,
-            seq_no_embed[3:, :]
+            seq_no_embed[4:, :]
         ], 0)
 
     # Load model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size
+        context_size=142
     ).to(device)
     state_dict = find_model(args.ckpt)
     model.load_state_dict(state_dict)
@@ -84,38 +92,44 @@ def main(args):
     sampled_seq = None
     if args.plot_time is not None:
         fig, ax = plt.subplots()
+        ax.axis('equal')
+        ax.set_xlim([0, 512])
+        ax.set_ylim([384, 0])
         artists = []
 
         for samples in diffusion.p_sample_loop_progressive(model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device):
-            samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-            sampled_seq = torch.concatenate([samples, seq_no_embed[2:].repeat(n, 1, 1)])
+            samples, _ = samples["sample"].chunk(2, dim=0)  # Remove null class samples
+            sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
             new_beatmap = create_beatmap(sampled_seq[0], beatmap, f"Diffusion {args.style_id}")
             artists.append(plot_beatmap(ax, new_beatmap, args.plot_time))
 
-        ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=200)
-        ani.save(filename=os.path.join("results", args.beatmap, "animation.gif"), writer="pillow")
+        ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=1000 // 24)
+        ani.save(filename=os.path.join(result_dir, "animation.gif"), writer="pillow")
     else:
         samples = diffusion.p_sample_loop(model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device)
         samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-        sampled_seq = torch.concatenate([samples, seq_no_embed[2:].repeat(n, 1, 1)])
+        sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
 
     # Save beatmaps:
     for i in range(n):
         new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
-        new_beatmap.write_path(os.path.join("results", args.beatmap, f"result{i}.osu"))
+        new_beatmap.write_path(os.path.join(result_dir, f"result{i}.osu"))
 
 
 def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time):
+    width = beatmap.cs() * 2
     hit_objects = beatmap.hit_objects(spinners=False)
-    windowed = [ho for ho in hit_objects if time - 1000 < ho.time < time + 1000]
+    min_time, max_time = timedelta(seconds=time / 1000 - 1), timedelta(seconds=time / 1000 + 1)
+    windowed = [ho for ho in hit_objects if min_time < ho.time < max_time]
     artists = []
     for ho in windowed:
         if isinstance(ho, Slider):
-            path = SliderPath("PerfectCurve" if ho.curve is Perfect else ("CatmulL" if ho.curve is Catmull else ("Linear" if ho.curve is Linear else "Bezier")), np.array(ho.curve.points))
+            path = SliderPath("PerfectCurve" if isinstance(ho.curve, Perfect) else ("CatmulL" if isinstance(ho.curve, Catmull) else ("Linear" if isinstance(ho.curve, Linear) else "Bezier")),
+                              np.array(ho.curve.points, dtype=float))
             p = np.vstack(path.calculatedPath)
-            artists.append(ax.plot(p[:, 0], p[:, 1], color="green"))
+            artists.append(ax.plot(p[:, 0], p[:, 1], color="green", linewidth=width, solid_capstyle="round", solid_joinstyle="round")[0])
     p = np.array([ho.position for ho in hit_objects])
-    artists.append(ax.scatter(p[0, :], p[1, :], beatmap.cs()))
+    artists.append(ax.scatter(p[:, 0], p[:, 1], s=width**2, c="Lime"))
     return artists
 
 

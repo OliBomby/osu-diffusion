@@ -48,7 +48,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
             curr_slider_path.append(pos)
         elif type_index >= 9 and isinstance(curr_object, Slider):
             # Determine length by finding the closest position to pos on the slider path
-            slider_path = SliderPath(curr_slider_type, np.array(curr_slider_path))
+            slider_path = SliderPath(curr_slider_type, np.array(curr_slider_path, dtype=float))
             req_length = slider_path.get_distance() * position_to_progress(slider_path, np.array(pos))
             curr_object.curve = slider_path_to_curve(slider_path, req_length)
             curr_object.length = req_length
@@ -67,7 +67,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
             new_sv_multiplier = req_length * ms_per_beat / (100 * global_sv * duration)
             timing_points.append(TimingPoint(
                 curr_object.time,
-                -100 / new_sv_multiplier,
+                -100 / new_sv_multiplier if new_sv_multiplier > 0 else -100,
                 tp.meter,
                 tp.sample_type,
                 tp.sample_set,
@@ -98,10 +98,10 @@ def position_to_progress(slider_path: SliderPath, pos: np.ndarray):
         grad = np.linalg.norm(slider_path.position_at(t) - pos) - np.linalg.norm(slider_path.position_at(t - eps) - pos)
         t -= lr * grad
 
-        if grad == 0:
+        if grad == 0 or t < 0 or t > 10:
             break
 
-    return t
+    return np.clip(t, 0, 10)
 
 def new_difficulty(ref_beatmap: Beatmap, version: str, hit_objects: list[HitObject], timing_points: list[TimingPoint]):
     return Beatmap(
