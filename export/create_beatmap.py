@@ -15,6 +15,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
     curr_object = None
     curr_slider_path = []
     curr_slider_type = None
+    span_duration = 0
     for j in range(seq_len):
         x = int(round(float(seq[0, j] * 512)))
         y = int(round(float(seq[1, j] * 384)))
@@ -46,6 +47,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
             curr_slider_path.append(pos)
         elif type_index == 8 and isinstance(curr_object, Slider):
             curr_slider_path.append(pos)
+            span_duration = (time - curr_object.time).total_seconds() * 1000
         elif type_index >= 9 and isinstance(curr_object, Slider):
             # Determine length by finding the closest position to pos on the slider path
             slider_path = SliderPath(curr_slider_type, np.array(curr_slider_path, dtype=float))
@@ -53,7 +55,8 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
             curr_object.curve = slider_path_to_curve(slider_path, req_length)
             curr_object.length = req_length
             curr_object.end_time = time
-            curr_object.repeat = type_index - 8
+            duration = (time - curr_object.time).total_seconds() * 1000
+            curr_object.repeat = int(round(duration / span_duration)) if type_index > 11 else type_index - 8
             curr_object.edge_sounds = [0] * curr_object.repeat
             curr_object.edge_additions = ['0:0'] * curr_object.repeat
             hit_objects.append(curr_object)
@@ -63,8 +66,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
             parent = tp.parent if tp.parent is not None else tp
             ms_per_beat = tp.parent.ms_per_beat if tp.parent is not None else tp.ms_per_beat
             global_sv = ref_beatmap.slider_multiplier
-            duration = (time - curr_object.time).total_seconds() * 1000
-            new_sv_multiplier = req_length * ms_per_beat / (100 * global_sv * duration)
+            new_sv_multiplier = req_length * ms_per_beat / (100 * global_sv * span_duration)
             timing_points.append(TimingPoint(
                 curr_object.time,
                 -100 / new_sv_multiplier if new_sv_multiplier > 0 else -100,
