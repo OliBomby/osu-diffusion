@@ -231,8 +231,8 @@ if __name__ == "__main__":
     # Default args here will train DiT-XL with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-path", type=str, required=True)
-    parser.add_argument("--num-classes", type=int, default=41189)
-    parser.add_argument("--data-end", type=int, default=10548)
+    parser.add_argument("--num-classes", type=int, default=52670)
+    parser.add_argument("--data-end", type=int, default=13402)
     parser.add_argument("--data-start", type=int, default=0)
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-B")

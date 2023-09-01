@@ -255,9 +255,9 @@ if __name__ == '__main__':
     batch_size = 256
     num_workers = 16
     dataloader = get_processed_data_loader(
-        dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS10548",
+        dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS13402",
         start = 0,
-        end = 10548,
+        end = 13402,
         seq_len = 64,
         stride = 16,
         cycle_length = 1,
