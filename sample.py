@@ -45,7 +45,7 @@ def main(args):
 
     seq_no_embed = beatmap_to_sequence(beatmap)
 
-    if args.plot_time is not None:
+    if args.plot_time is not None and False:
         seq_no_embed = seq_no_embed[:, (seq_no_embed[2] > args.plot_time - args.plot_width) & (seq_no_embed[2] < args.plot_time + args.plot_width)]
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
@@ -71,7 +71,7 @@ def main(args):
     if args.style_id is not None:
         beatmap_idx = get_beatmap_idx()
         idx = beatmap_idx[args.style_id]
-        class_labels = [idx]
+        class_labels = [idx + i for i in range(4)]
     else:
         # Use null class
         class_labels = [args.num_classes]
