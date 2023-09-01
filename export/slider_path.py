@@ -17,7 +17,7 @@ def binary_search(array, target):
             lower = x
         elif target < val:
             upper = x
-    return ~lower
+    return ~upper
 
 
 class SliderPath:
@@ -143,7 +143,7 @@ class SliderPath:
             if d <= 0:
                 return
 
-            self.calculatedPath[-1] += diff * (self.expectedDistance - 1) / d
+            self.calculatedPath[-1] += diff * (self.expectedDistance - self.cumulativeLength[-1]) / d
             self.cumulativeLength[-1] = self.expectedDistance
 
     def index_of_distance(self, d):

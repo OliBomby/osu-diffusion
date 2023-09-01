@@ -46,7 +46,7 @@ def main(args):
     seq_no_embed = beatmap_to_sequence(beatmap)
 
     if args.plot_time is not None:
-        seq_no_embed = seq_no_embed[:, (seq_no_embed[2] > args.plot_time - 1000) & (seq_no_embed[2] < args.plot_time + 1000)]
+        seq_no_embed = seq_no_embed[:, (seq_no_embed[2] > args.plot_time - args.plot_width) & (seq_no_embed[2] < args.plot_time + args.plot_width)]
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
     seq_len = seq_no_embed.shape[1]
@@ -70,7 +70,8 @@ def main(args):
     # Labels to condition the model with (feel free to change):
     if args.style_id is not None:
         beatmap_idx = get_beatmap_idx()
-        class_labels = [beatmap_idx[args.style_id]]
+        idx = beatmap_idx[args.style_id]
+        class_labels = [idx]
     else:
         # Use null class
         class_labels = [args.num_classes]
@@ -90,7 +91,7 @@ def main(args):
 
     # Sample images:
     sampled_seq = None
-    if args.plot_time is not None:
+    if args.plot_time is not None and False:
         fig, ax = plt.subplots()
         ax.axis('equal')
         ax.set_xlim([0, 512])
@@ -101,7 +102,7 @@ def main(args):
             samples, _ = samples["sample"].chunk(2, dim=0)  # Remove null class samples
             sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
             new_beatmap = create_beatmap(sampled_seq[0], beatmap, f"Diffusion {args.style_id}")
-            artists.append(plot_beatmap(ax, new_beatmap, args.plot_time))
+            artists.append(plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width))
 
         ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=1000 // 24)
         ani.save(filename=os.path.join(result_dir, "animation.gif"), writer="pillow")
@@ -115,18 +116,29 @@ def main(args):
         new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
         new_beatmap.write_path(os.path.join(result_dir, f"result{i}.osu"))
 
+        fig, ax = plt.subplots()
+        ax.axis('equal')
+        ax.set_xlim([0, 512])
+        ax.set_ylim([384, 0])
+        plt.cla()
+        plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
+        plt.show()
 
-def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time):
+
+def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
     width = beatmap.cs() * 2
     hit_objects = beatmap.hit_objects(spinners=False)
-    min_time, max_time = timedelta(seconds=time / 1000 - 1), timedelta(seconds=time / 1000 + 1)
+    min_time, max_time = timedelta(seconds=(time - window_size) / 1000), timedelta(seconds=(time + window_size) / 1000)
     windowed = [ho for ho in hit_objects if min_time < ho.time < max_time]
     artists = []
     for ho in windowed:
         if isinstance(ho, Slider):
-            path = SliderPath("PerfectCurve" if isinstance(ho.curve, Perfect) else ("CatmulL" if isinstance(ho.curve, Catmull) else ("Linear" if isinstance(ho.curve, Linear) else "Bezier")),
-                              np.array(ho.curve.points, dtype=float))
-            p = np.vstack(path.calculatedPath)
+            slider_path = SliderPath("PerfectCurve" if isinstance(ho.curve, Perfect) else ("CatmulL" if isinstance(ho.curve, Catmull) else ("Linear" if isinstance(ho.curve, Linear) else "Bezier")),
+                              np.array(ho.curve.points, dtype=float),
+                              ho.curve.req_length)
+            path = []
+            slider_path.get_path_to_progress(path, 0, 1)
+            p = np.vstack(path)
             artists.append(ax.plot(p[:, 0], p[:, 1], color="green", linewidth=width, solid_capstyle="round", solid_joinstyle="round")[0])
     p = np.array([ho.position for ho in hit_objects])
     artists.append(ax.scatter(p[:, 0], p[:, 1], s=width**2, c="Lime"))
@@ -146,5 +158,6 @@ if __name__ == "__main__":
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
+    parser.add_argument("--plot-width", type=float, default=1000)
     args = parser.parse_args()
     main(args)
