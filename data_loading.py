@@ -107,6 +107,18 @@ def beatmap_to_sequence(beatmap):
     return sequence.float()
 
 
+def split_and_process_sequence(seq):
+    seq_x = seq[:2, :]
+    seq_y = torch.concatenate(
+        [
+            timestep_embedding(seq[2, :] / 100, 128, 36000).T,
+            timestep_embedding(seq[3, :], 128).T,
+            seq[4:, :]
+        ], 0)
+
+    return seq_x, seq_y
+
+
 class BeatmapDatasetIterable:
     def __init__(self, beatmap_files, beatmap_idx, seq_len, stride):
         self.beatmap_files = beatmap_files
@@ -134,13 +146,7 @@ class BeatmapDatasetIterable:
             self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
 
             seq_no_embed = beatmap_to_sequence(beatmap)
-            self.current_seq_x = seq_no_embed[:2, :]
-            self.current_seq_y = torch.concatenate(
-                [
-                    timestep_embedding(seq_no_embed[2, :] / 100, 128, 36000).T,
-                    timestep_embedding(seq_no_embed[3, :], 128).T,
-                    seq_no_embed[4:, :]
-                ], 0)
+            self.current_seq_x, self.current_seq_y = split_and_process_sequence(seq_no_embed)
 
             self.seq_index = 0
             self.index += 1

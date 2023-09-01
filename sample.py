@@ -20,7 +20,7 @@ from export.slider_path import SliderPath
 from positional_embedding import timestep_embedding
 from diffusion import create_diffusion
 from models import DiT_models
-from data_loading import context_size, beatmap_to_sequence, get_beatmap_idx
+from data_loading import context_size, beatmap_to_sequence, get_beatmap_idx, split_and_process_sequence
 
 
 def find_model(ckpt_path):
@@ -50,17 +50,12 @@ def main(args):
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
     seq_len = seq_no_embed.shape[1]
-    seq_x = seq_no_embed[:2, :]
-    seq_y = torch.concatenate(
-        [
-            timestep_embedding(seq_no_embed[2, :], 128, 36000).T,
-            seq_no_embed[4:, :]
-        ], 0)
+    seq_x, seq_y = split_and_process_sequence(seq_no_embed)
 
     # Load model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=142
+        context_size=context_size
     ).to(device)
     state_dict = find_model(args.ckpt)
     model.load_state_dict(state_dict)
@@ -71,7 +66,7 @@ def main(args):
     if args.style_id is not None:
         beatmap_idx = get_beatmap_idx()
         idx = beatmap_idx[args.style_id]
-        class_labels = [idx + i for i in range(4)]
+        class_labels = [idx + i for i in range(args.num_variants)]
     else:
         # Use null class
         class_labels = [args.num_classes]
@@ -114,7 +109,7 @@ def main(args):
     # Save beatmaps:
     for i in range(n):
         new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
-        new_beatmap.write_path(os.path.join(result_dir, f"result{i}.osu"))
+        new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result{i}.osu"))
 
         fig, ax = plt.subplots()
         ax.axis('equal')
@@ -140,7 +135,7 @@ def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
             slider_path.get_path_to_progress(path, 0, 1)
             p = np.vstack(path)
             artists.append(ax.plot(p[:, 0], p[:, 1], color="green", linewidth=width, solid_capstyle="round", solid_joinstyle="round")[0])
-    p = np.array([ho.position for ho in hit_objects])
+    p = np.array([ho.position for ho in windowed]).reshape((-1, 2))
     artists.append(ax.scatter(p[:, 0], p[:, 1], s=width**2, c="Lime"))
     return artists
 
@@ -150,7 +145,7 @@ if __name__ == "__main__":
     parser.add_argument("--beatmap", type=str, required=True)
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-B")
-    parser.add_argument("--num-classes", type=int, default=41189)
+    parser.add_argument("--num-classes", type=int, default=52670)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
@@ -159,5 +154,6 @@ if __name__ == "__main__":
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
     parser.add_argument("--plot-width", type=float, default=1000)
+    parser.add_argument("--num-variants", type=int, default=1)
     args = parser.parse_args()
     main(args)
