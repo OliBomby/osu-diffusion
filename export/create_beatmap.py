@@ -82,6 +82,9 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
 def slider_path_to_curve(slider_path: SliderPath, req_length: float):
     points = [Position(p[0], p[1]) for p in slider_path.controlPoints]
 
+    if slider_path.pathType == "PerfectCurve" and is_collinear(*points):
+        slider_path.pathType = "Bezier"
+
     if slider_path.pathType == "Bezier":
         return MultiBezier(points, req_length)
     elif slider_path.pathType == "PerfectCurve":
@@ -90,6 +93,28 @@ def slider_path_to_curve(slider_path: SliderPath, req_length: float):
         return Catmull(points, req_length)
     else:
         return Linear(points, req_length)
+
+
+def is_collinear(a, b, c):
+    a, b, c = np.array([a, b, c], dtype=np.float64)
+
+    a_squared = np.sum(np.square(b - c))
+    b_squared = np.sum(np.square(a - c))
+    c_squared = np.sum(np.square(a - b))
+
+    if np.isclose([a_squared, b_squared, c_squared], 0).any():
+        return True
+
+    s = a_squared * (b_squared + c_squared - a_squared)
+    t = b_squared * (a_squared + c_squared - b_squared)
+    u = c_squared * (a_squared + b_squared - c_squared)
+
+    sum_ = s + t + u
+
+    if np.isclose(sum_, 0):
+        return True
+
+    return False
 
 
 def position_to_progress(slider_path: SliderPath, pos: np.ndarray):
