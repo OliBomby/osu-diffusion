@@ -107,6 +107,14 @@ def beatmap_to_sequence(beatmap):
     return sequence.float()
 
 
+def random_flip(seq_x: torch.Tensor):
+    if random.random() < 0.5:
+        seq_x[0] = 1 - seq_x[0]
+    if random.random() < 0.5:
+        seq_x[1] = 1 - seq_x[1]
+    return seq_x
+
+
 def split_and_process_sequence(seq: torch.Tensor):
     seq_x = seq[:2, :]
     seq_y = torch.concatenate(
@@ -149,6 +157,9 @@ class BeatmapDatasetIterable:
 
             seq_no_embed = beatmap_to_sequence(beatmap)
             self.current_seq_x, self.current_seq_y = split_and_process_sequence(seq_no_embed)
+
+            # Augment data
+            self.current_seq_x = random_flip(self.current_seq_x)
 
             self.seq_index = 0
             self.index += 1
