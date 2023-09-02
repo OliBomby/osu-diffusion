@@ -160,8 +160,8 @@ class BeatmapDatasetIterable:
 
             # Augment data
             self.current_seq_x = random_flip(self.current_seq_x)
+            self.seq_index = random.randint(0, self.stride - 1)
 
-            self.seq_index = 0
             self.index += 1
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
