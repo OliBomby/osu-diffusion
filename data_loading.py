@@ -15,7 +15,7 @@ from positional_embedding import timestep_embedding
 
 
 playfield_size = torch.tensor((512, 384))
-context_size = 14 + 128 * 2
+context_size = 16 + 128 * 2
 
 
 def create_datapoint(time: timedelta, pos: Position, datatype, last_pos: Position):
@@ -121,9 +121,7 @@ def split_and_process_sequence(seq: torch.Tensor):
         [
             timestep_embedding(seq[2, :] / 100, 128, 36000).T,
             timestep_embedding(seq[3, :], 128).T,
-            seq[4, :].unsqueeze(0),
-            seq[6:9, :],
-            seq[10:, :],
+            seq[4:, :],
         ], 0)
 
     return seq_x, seq_y
