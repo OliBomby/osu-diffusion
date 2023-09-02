@@ -76,6 +76,6 @@ for i in range(0, 13402):
         idx += 1
         print(f"\r{idx}", end='')
 
-beatmap_df.to_pickle("beatmap_df2.pkl")
+beatmap_df.to_pickle("beatmap_df.pkl")
 beatmap_df.describe()
 print(beatmap_df.head())

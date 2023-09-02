@@ -1,4 +1,3 @@
 results/
 /embeddings/beatmap_df.pkl
 /embeddings/2d-embs.npy
-/embeddings/beatmap_df2.pkl
