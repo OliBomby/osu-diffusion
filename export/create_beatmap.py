@@ -1,9 +1,11 @@
 import numpy as np
 import torch
 from datetime import timedelta
+
+from matplotlib import pyplot as plt
 from slider import Position
 from slider.beatmap import Circle, Slider, Spinner, Beatmap, TimingPoint, HitObject
-from slider.curve import MultiBezier, Perfect, Catmull, Linear
+from slider.curve import MultiBezier, Perfect, Catmull, Linear, Curve
 
 from export.slider_path import SliderPath
 
@@ -24,31 +26,37 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
         pos = Position(x, y)
 
         if type_index == 0:
-            hit_objects.append(Circle(pos, time, 0))
-        elif type_index == 1:
-            curr_object = Spinner(pos, time, 0, time)
-        elif type_index == 2 and isinstance(curr_object, Spinner):
+            hit_objects.append(Circle(pos, time, False, 0, 0))
+        if type_index == 1:
+            hit_objects.append(Circle(pos, time, True, 0, 0))
+        elif type_index == 2:
+            curr_object = Spinner(pos, time, False, 0, time)
+        elif type_index == 3 and isinstance(curr_object, Spinner):
             curr_object.end_time = time
             hit_objects.append(curr_object)
-        elif type_index == 3:
-            curr_object = Slider(pos, time, time, 0, MultiBezier([pos], 0), 0, 0, 0, 0, 0, 0, [], [])
+        elif type_index == 4:
+            curr_object = Slider(pos, time, False, 0, time, 0, MultiBezier([pos], 0), 0, 0, 0, 0, 0, 0, [], [])
             curr_slider_path = [pos]
             curr_slider_type = "Bezier"
-        elif type_index == 4 and isinstance(curr_object, Slider):
-            curr_slider_path.append(pos)
-        elif type_index == 5 and isinstance(curr_object, Slider):
-            curr_slider_path.append(pos)
-            curr_slider_type = "PerfectCurve"
+        elif type_index == 5:
+            curr_object = Slider(pos, time, True, 0, time, 0, MultiBezier([pos], 0), 0, 0, 0, 0, 0, 0, [], [])
+            curr_slider_path = [pos]
+            curr_slider_type = "Bezier"
         elif type_index == 6 and isinstance(curr_object, Slider):
             curr_slider_path.append(pos)
-            curr_slider_type = "Catmull"
         elif type_index == 7 and isinstance(curr_object, Slider):
             curr_slider_path.append(pos)
-            curr_slider_path.append(pos)
+            curr_slider_type = "PerfectCurve"
         elif type_index == 8 and isinstance(curr_object, Slider):
             curr_slider_path.append(pos)
+            curr_slider_type = "Catmull"
+        elif type_index == 9 and isinstance(curr_object, Slider):
+            curr_slider_path.append(pos)
+            curr_slider_path.append(pos)
+        elif type_index == 10 and isinstance(curr_object, Slider):
+            curr_slider_path.append(pos)
             span_duration = (time - curr_object.time).total_seconds() * 1000
-        elif type_index >= 9 and isinstance(curr_object, Slider):
+        elif type_index >= 11 and isinstance(curr_object, Slider):
             # Determine length by finding the closest position to pos on the slider path
             slider_path = SliderPath(curr_slider_type, np.array(curr_slider_path, dtype=float))
             req_length = slider_path.get_distance() * position_to_progress(slider_path, np.array(pos))
@@ -56,7 +64,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
             curr_object.length = req_length
             curr_object.end_time = time
             duration = (time - curr_object.time).total_seconds() * 1000
-            curr_object.repeat = int(round(duration / span_duration)) if type_index > 11 else type_index - 8
+            curr_object.repeat = int(round(duration / span_duration)) if type_index > 13 else type_index - 10
             curr_object.edge_sounds = [0] * curr_object.repeat
             curr_object.edge_additions = ['0:0'] * curr_object.repeat
             hit_objects.append(curr_object)
@@ -82,39 +90,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
 def slider_path_to_curve(slider_path: SliderPath, req_length: float):
     points = [Position(p[0], p[1]) for p in slider_path.controlPoints]
 
-    if slider_path.pathType == "PerfectCurve" and is_collinear(*points):
-        slider_path.pathType = "Bezier"
-
-    if slider_path.pathType == "Bezier":
-        return MultiBezier(points, req_length)
-    elif slider_path.pathType == "PerfectCurve":
-        return Perfect(points, req_length)
-    elif slider_path.pathType == "Catmull":
-        return Catmull(points, req_length)
-    else:
-        return Linear(points, req_length)
-
-
-def is_collinear(a, b, c):
-    a, b, c = np.array([a, b, c], dtype=np.float64)
-
-    a_squared = np.sum(np.square(b - c))
-    b_squared = np.sum(np.square(a - c))
-    c_squared = np.sum(np.square(a - b))
-
-    if np.isclose([a_squared, b_squared, c_squared], 0).any():
-        return True
-
-    s = a_squared * (b_squared + c_squared - a_squared)
-    t = b_squared * (a_squared + c_squared - b_squared)
-    u = c_squared * (a_squared + b_squared - c_squared)
-
-    sum_ = s + t + u
-
-    if np.isclose(sum_, 0):
-        return True
-
-    return False
+    return Curve.from_kind_and_points(slider_path.pathType[0], points, req_length)
 
 
 def position_to_progress(slider_path: SliderPath, pos: np.ndarray):
@@ -125,10 +101,10 @@ def position_to_progress(slider_path: SliderPath, pos: np.ndarray):
         grad = np.linalg.norm(slider_path.position_at(t) - pos) - np.linalg.norm(slider_path.position_at(t - eps) - pos)
         t -= lr * grad
 
-        if grad == 0 or t < 0 or t > 10:
+        if grad == 0 or t < 0 or t > 1:
             break
 
-    return np.clip(t, 0, 10)
+    return np.clip(t, 0, 1)
 
 def new_difficulty(ref_beatmap: Beatmap, version: str, hit_objects: list[HitObject], timing_points: list[TimingPoint]):
     return Beatmap(
@@ -166,3 +142,23 @@ def new_difficulty(ref_beatmap: Beatmap, version: str, hit_objects: list[HitObje
         timing_points=timing_points,
         hit_objects=hit_objects
     )
+
+
+def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
+    width = beatmap.cs() * 4
+    hit_objects = beatmap.hit_objects(spinners=False)
+    min_time, max_time = timedelta(seconds=(time - window_size) / 1000), timedelta(seconds=(time + window_size) / 1000)
+    windowed = [ho for ho in hit_objects if min_time < ho.time < max_time]
+    artists = []
+    for ho in windowed:
+        if isinstance(ho, Slider):
+            slider_path = SliderPath("PerfectCurve" if isinstance(ho.curve, Perfect) else ("CatmulL" if isinstance(ho.curve, Catmull) else ("Linear" if isinstance(ho.curve, Linear) else "Bezier")),
+                              np.array(ho.curve.points, dtype=float),
+                              ho.curve.req_length)
+            path = []
+            slider_path.get_path_to_progress(path, 0, 1)
+            p = np.vstack(path)
+            artists.append(ax.plot(p[:, 0], p[:, 1], color="green", linewidth=width, solid_capstyle="round", solid_joinstyle="round")[0])
+    p = np.array([ho.position for ho in windowed]).reshape((-1, 2))
+    artists.append(ax.scatter(p[:, 0], p[:, 1], s=width**2, c="Lime"))
+    return artists

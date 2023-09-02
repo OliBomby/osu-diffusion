@@ -21,7 +21,7 @@ context_size = 14 + 128 * 2
 def create_datapoint(time: timedelta, pos: Position, datatype, last_pos: Position):
     dist = math.sqrt((pos.x - last_pos.x)**2 + (pos.y - last_pos.y)**2)
     pos_enc = torch.tensor(pos) / playfield_size
-    type_enc = torch.zeros(16)
+    type_enc = torch.zeros(18)
     type_enc[0] = time.total_seconds() * 1000
     type_enc[1] = dist
     type_enc[datatype + 2] = 1
@@ -52,18 +52,18 @@ def append_control_points(datapoints, ho: Slider, datatype, duration, last_pos: 
 
 def get_data(ho: HitObject, last_pos: Position):
     if isinstance(ho, Slider) and len(ho.curve.points) < 100:
-        datapoints = [create_datapoint(ho.time, ho.position, 3, last_pos)]
+        datapoints = [create_datapoint(ho.time, ho.position, 5 if ho.new_combo else 4, last_pos)]
         last_pos = ho.position
 
         assert ho.repeat >= 1
         duration = (ho.end_time - ho.time) / ho.repeat
 
         if isinstance(ho.curve, Linear):
-            last_pos = append_control_points(datapoints, ho, 7, duration, last_pos)
+            last_pos = append_control_points(datapoints, ho, 9, duration, last_pos)
         elif isinstance(ho.curve, Catmull):
-            last_pos = append_control_points(datapoints, ho, 6, duration, last_pos)
+            last_pos = append_control_points(datapoints, ho, 8, duration, last_pos)
         elif isinstance(ho.curve, Perfect):
-            last_pos = append_control_points(datapoints, ho, 5, duration, last_pos)
+            last_pos = append_control_points(datapoints, ho, 7, duration, last_pos)
         elif isinstance(ho.curve, MultiBezier):
             control_point_count = len(ho.curve.points)
 
@@ -72,24 +72,24 @@ def get_data(ho: HitObject, last_pos: Position):
                 pos = ho.curve.points[i]
 
                 if pos == ho.curve.points[i + 1]:
-                    datapoints.append(create_datapoint(time, pos, 7, last_pos))
+                    datapoints.append(create_datapoint(time, pos, 9, last_pos))
                     last_pos = pos
                 elif pos != ho.curve.points[i - 1]:
-                    datapoints.append(create_datapoint(time, pos, 4, last_pos))
+                    datapoints.append(create_datapoint(time, pos, 6, last_pos))
                     last_pos = pos
 
-        datapoints.append(create_datapoint(ho.time + duration, ho.curve.points[-1], 8, last_pos))
+        datapoints.append(create_datapoint(ho.time + duration, ho.curve.points[-1], 10, last_pos))
         last_pos = ho.curve.points[-1]
 
         slider_end_pos = ho.curve(1)
-        datapoints.append(create_datapoint(ho.end_time, slider_end_pos, 9 + repeat_type(ho.repeat), last_pos))
+        datapoints.append(create_datapoint(ho.end_time, slider_end_pos, 11 + repeat_type(ho.repeat), last_pos))
 
         return torch.stack(datapoints, 0), slider_end_pos
 
     if isinstance(ho, Spinner):
-        return torch.stack((create_datapoint(ho.time, ho.position, 1, last_pos), create_datapoint(ho.end_time, ho.position, 2, ho.position)), 0), ho.position
+        return torch.stack((create_datapoint(ho.time, ho.position, 2, last_pos), create_datapoint(ho.end_time, ho.position, 3, ho.position)), 0), ho.position
 
-    return create_datapoint(ho.time, ho.position, 0, last_pos).unsqueeze(0), ho.position
+    return create_datapoint(ho.time, ho.position, 1 if ho.new_combo else 0, last_pos).unsqueeze(0), ho.position
 
 
 def beatmap_to_sequence(beatmap):
@@ -107,13 +107,15 @@ def beatmap_to_sequence(beatmap):
     return sequence.float()
 
 
-def split_and_process_sequence(seq):
+def split_and_process_sequence(seq: torch.Tensor):
     seq_x = seq[:2, :]
     seq_y = torch.concatenate(
         [
             timestep_embedding(seq[2, :] / 100, 128, 36000).T,
             timestep_embedding(seq[3, :], 128).T,
-            seq[4:, :]
+            seq[4, :].unsqueeze(0),
+            seq[6:9, :],
+            seq[10:, :],
         ], 0)
 
     return seq_x, seq_y

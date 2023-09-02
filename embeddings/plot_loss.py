@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 
 log_files = [
     ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\old\\log.txt", 0),
-    ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\log.txt", 0),
+    ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s64\\log.txt", 0),
     ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s128\\log.txt", 1600),
+    ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s256\\log.txt", 3200),
 ]
 
 for path, x_offset in log_files:

@@ -5,19 +5,13 @@ import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
-from datetime import timedelta
-import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import argparse
 import os
 from slider import Beatmap
-from slider.beatmap import Slider
-from slider.curve import Perfect, Catmull, Linear
 
-from export.create_beatmap import create_beatmap
-from export.slider_path import SliderPath
-from positional_embedding import timestep_embedding
+from export.create_beatmap import create_beatmap, plot_beatmap
 from diffusion import create_diffusion
 from models import DiT_models
 from data_loading import context_size, beatmap_to_sequence, get_beatmap_idx, split_and_process_sequence
@@ -43,10 +37,12 @@ def main(args):
     result_dir = os.path.join("results", str(beatmap.beatmap_id))
     os.makedirs(result_dir, exist_ok=True)
 
-    seq_no_embed = beatmap_to_sequence(beatmap)[:, 3*128:4*128]
+    seq_no_embed = beatmap_to_sequence(beatmap)
 
-    if args.plot_time is not None and False:
-        seq_no_embed = seq_no_embed[:, (seq_no_embed[2] > args.plot_time - args.plot_width) & (seq_no_embed[2] < args.plot_time + args.plot_width)]
+    if args.plot_time is not None:
+        # noinspection PyTypeChecker
+        start_index = torch.nonzero(seq_no_embed[2] >= args.plot_time)[0]
+        seq_no_embed = seq_no_embed[:, start_index:start_index + args.seq_len]
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
     seq_len = seq_no_embed.shape[1]
@@ -110,7 +106,7 @@ def main(args):
     for i in range(n):
         try:
             new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
-            new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result{i}.osu"))
+            new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result {i}.osu"))
 
             fig, ax = plt.subplots()
             ax.axis('equal')
@@ -123,36 +119,16 @@ def main(args):
             print(e)
 
 
-def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
-    width = beatmap.cs() * 2
-    hit_objects = beatmap.hit_objects(spinners=False)
-    min_time, max_time = timedelta(seconds=(time - window_size) / 1000), timedelta(seconds=(time + window_size) / 1000)
-    windowed = [ho for ho in hit_objects if min_time < ho.time < max_time]
-    artists = []
-    for ho in windowed:
-        if isinstance(ho, Slider):
-            slider_path = SliderPath("PerfectCurve" if isinstance(ho.curve, Perfect) else ("CatmulL" if isinstance(ho.curve, Catmull) else ("Linear" if isinstance(ho.curve, Linear) else "Bezier")),
-                              np.array(ho.curve.points, dtype=float),
-                              ho.curve.req_length)
-            path = []
-            slider_path.get_path_to_progress(path, 0, 1)
-            p = np.vstack(path)
-            artists.append(ax.plot(p[:, 0], p[:, 1], color="green", linewidth=width, solid_capstyle="round", solid_joinstyle="round")[0])
-    p = np.array([ho.position for ho in windowed]).reshape((-1, 2))
-    artists.append(ax.scatter(p[:, 0], p[:, 1], s=width**2, c="Lime"))
-    return artists
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--beatmap", type=str, required=True)
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-B")
     parser.add_argument("--num-classes", type=int, default=52670)
-    parser.add_argument("--cfg-scale", type=float, default=4.0)
+    parser.add_argument("--cfg-scale", type=float, default=1.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--seq-len", type=int, default=64)
+    parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
