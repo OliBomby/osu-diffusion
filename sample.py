@@ -43,7 +43,7 @@ def main(args):
     result_dir = os.path.join("results", str(beatmap.beatmap_id))
     os.makedirs(result_dir, exist_ok=True)
 
-    seq_no_embed = beatmap_to_sequence(beatmap)
+    seq_no_embed = beatmap_to_sequence(beatmap)[:, 3*128:4*128]
 
     if args.plot_time is not None and False:
         seq_no_embed = seq_no_embed[:, (seq_no_embed[2] > args.plot_time - args.plot_width) & (seq_no_embed[2] < args.plot_time + args.plot_width)]
@@ -108,16 +108,19 @@ def main(args):
 
     # Save beatmaps:
     for i in range(n):
-        new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
-        new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result{i}.osu"))
+        try:
+            new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
+            new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result{i}.osu"))
 
-        fig, ax = plt.subplots()
-        ax.axis('equal')
-        ax.set_xlim([0, 512])
-        ax.set_ylim([384, 0])
-        plt.cla()
-        plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
-        plt.show()
+            fig, ax = plt.subplots()
+            ax.axis('equal')
+            ax.set_xlim([0, 512])
+            ax.set_ylim([384, 0])
+            plt.cla()
+            plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
+            plt.show()
+        except Exception as e:
+            print(e)
 
 
 def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
