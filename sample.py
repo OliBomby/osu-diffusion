@@ -46,7 +46,8 @@ def main(args):
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
     seq_len = seq_no_embed.shape[1]
-    seq_x, seq_y = split_and_process_sequence(seq_no_embed)
+    seq_x, seq_o, seq_c = split_and_process_sequence(seq_no_embed)
+    seq_o -= seq_o[0]  # Normalize to relative time
 
     # Load model:
     model = DiT_models[args.model](
@@ -75,15 +76,17 @@ def main(args):
     # Create sampling noise:
     n = len(class_labels)
     z = torch.randn(n, 2, seq_len, device=device)
-    c = seq_y.repeat(n, 1, 1).to(device)
+    o = seq_o.repeat(n, 1).to(device)
+    c = seq_c.repeat(n, 1, 1).to(device)
     y = torch.tensor(class_labels, device=device)
 
     # Setup classifier-free guidance:
     z = torch.cat([z, z], 0)
+    o = torch.cat([o, o], 0)
     c = torch.cat([c, c], 0)
     y_null = torch.tensor([args.num_classes] * n, device=device)
     y = torch.cat([y, y_null], 0)
-    model_kwargs = dict(c=c, y=y, cfg_scale=args.cfg_scale, attn_mask=attn_mask)
+    model_kwargs = dict(o=o, c=c, y=y, cfg_scale=args.cfg_scale, attn_mask=attn_mask)
 
     # Sample images:
     sampled_seq = None

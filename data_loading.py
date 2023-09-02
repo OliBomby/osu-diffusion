@@ -11,11 +11,10 @@ import torch
 from slider.curve import Linear, Catmull, Perfect, MultiBezier
 from torch.utils.data import IterableDataset, DataLoader
 
-from positional_embedding import timestep_embedding
-
+from positional_embedding import timestep_embedding, position_sequence_embedding, offset_sequence_embedding
 
 playfield_size = torch.tensor((512, 384))
-context_size = 16 + 128 * 2
+context_size = 16 + 128
 
 
 def create_datapoint(time: timedelta, pos: Position, datatype, last_pos: Position):
@@ -117,14 +116,14 @@ def random_flip(seq_x: torch.Tensor):
 
 def split_and_process_sequence(seq: torch.Tensor):
     seq_x = seq[:2, :]
-    seq_y = torch.concatenate(
+    seq_o = seq[2, :]
+    seq_c = torch.concatenate(
         [
-            timestep_embedding(seq[2, :] / 100, 128, 36000).T,
             timestep_embedding(seq[3, :], 128).T,
             seq[4:, :],
         ], 0)
 
-    return seq_x, seq_y
+    return seq_x, seq_o, seq_c
 
 
 class BeatmapDatasetIterable:
@@ -136,7 +135,8 @@ class BeatmapDatasetIterable:
         self.index = 0
         self.current_idx = 0
         self.current_seq_x = None
-        self.current_seq_y = None
+        self.current_seq_o = None
+        self.current_seq_c = None
         self.seq_index = 0
 
     def __iter__(self):
@@ -154,7 +154,7 @@ class BeatmapDatasetIterable:
             self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
 
             seq_no_embed = beatmap_to_sequence(beatmap)
-            self.current_seq_x, self.current_seq_y = split_and_process_sequence(seq_no_embed)
+            self.current_seq_x, self.current_seq_o, self.current_seq_c = split_and_process_sequence(seq_no_embed)
 
             # Augment data
             self.current_seq_x = random_flip(self.current_seq_x)
@@ -164,9 +164,10 @@ class BeatmapDatasetIterable:
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
         x = self.current_seq_x[:, self.seq_index:self.seq_index + self.seq_len]
-        y = self.current_seq_y[:, self.seq_index:self.seq_index + self.seq_len]
+        o = self.current_seq_o[self.seq_index:self.seq_index + self.seq_len] - self.current_seq_o[self.seq_index]  # Normalize to relative time
+        c = self.current_seq_c[:, self.seq_index:self.seq_index + self.seq_len]
         self.seq_index += self.stride
-        return x, y, self.current_idx
+        return x, o, c, self.current_idx
 
 
 class InterleavingBeatmapDatasetIterable:
@@ -275,9 +276,9 @@ if __name__ == '__main__':
         dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS13402",
         start = 0,
         end = 13402,
-        seq_len = 64,
+        seq_len = 128,
         stride = 16,
-        cycle_length = 1,
+        cycle_length = 128,
         batch_size = batch_size,
         num_workers = num_workers,
         shuffle = False,
@@ -286,18 +287,21 @@ if __name__ == '__main__':
     )
 
     # import matplotlib.pyplot as plt
-    # for x, c, y in dataloader:
+    # for x, o, c, y in dataloader:
     #     x = torch.swapaxes(x, 1, 2)   # (N, T, C)
     #     c = torch.swapaxes(c, 1, 2)   # (N, T, E)
-    #     print(x.shape, c.shape, y.shape)
+    #     print(x.shape, o.shape, c.shape, y.shape)
     #     batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
     #     print(batch_pos_emb.shape)
+    #     batch_offset_emb = offset_sequence_embedding(o / 10, 128)
+    #     print(batch_offset_emb.shape)
     #     print(y)
     #
     #     for j in range(batch_size):
-    #         fig, axs = plt.subplots(2, figsize=(10, 5))
+    #         fig, axs = plt.subplots(3, figsize=(5, 30))
     #         axs[0].imshow(batch_pos_emb[j])
-    #         axs[1].imshow(c[j])
+    #         axs[1].imshow(batch_offset_emb[j])
+    #         axs[2].imshow(c[j])
     #         print(y[j])
     #         plt.show()
     #     break

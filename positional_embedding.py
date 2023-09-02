@@ -39,6 +39,20 @@ def timestep_embedding(t, dim, max_period=10000):
     return embedding
 
 
+def offset_sequence_embedding(t, dim, max_period=10000):
+    """
+        Create sinusoidal timestep embeddings.
+        :param t: an (N, T) Tensor of sequences of time offsets
+        :param dim: the dimension of the output.
+        :param max_period: controls the minimum frequency of the embeddings.
+        :return: an (N, T, dim) Tensor of positional embeddings.
+        """
+    N, T = t.shape
+    flattened = torch.flatten(t)
+    embedding = timestep_embedding(flattened, dim, max_period)
+    return torch.reshape(embedding, (N, T, dim))
+
+
 def position_sequence_embedding(t, dim, max_period=10000):
     """
     Create sinusoidal timestep embeddings.

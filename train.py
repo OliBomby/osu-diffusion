@@ -172,13 +172,14 @@ def main(args):
     logger.info(f"Training for {args.epochs} epochs...")
     for epoch in range(args.epochs):
         logger.info(f"Beginning epoch {epoch}...")
-        for x, c, y in loader:
+        for x, o, c, y in loader:
             x = x.to(device)
+            o = o.to(device)
             c = c.to(device)
             y = y.to(device)
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=args.use_amp):
-                model_kwargs = dict(c=c, y=y)
+                model_kwargs = dict(o=o, c=c, y=y)
                 loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
                 loss = loss_dict["loss"].mean()
             scaler.scale(loss).backward()

@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from functools import partial
 
-from positional_embedding import timestep_embedding, position_sequence_embedding
+from positional_embedding import timestep_embedding, position_sequence_embedding, offset_sequence_embedding
 
 
 def modulate(x, shift, scale):
@@ -159,16 +159,17 @@ class FirstLayer(nn.Module):
     def __init__(self, hidden_size, context_size, in_channels, frequency_embedding_size=128):
         super().__init__()
         self.mlp = nn.Sequential(
-            nn.Linear(in_channels * frequency_embedding_size + context_size, hidden_size, bias=True),
+            nn.Linear(in_channels * frequency_embedding_size + frequency_embedding_size + context_size, hidden_size, bias=True),
         )
         self.frequency_embedding_size = frequency_embedding_size
         self.playfield_size = nn.Parameter(torch.tensor((512, 384), dtype=torch.float32), requires_grad=False)
 
-    def forward(self, x, c):
+    def forward(self, x, o, c):
         x_freq = position_sequence_embedding(x * self.playfield_size, self.frequency_embedding_size)
-        xc = torch.concatenate((x_freq, c), -1)
-        xc_emb = self.mlp(xc)
-        return xc_emb
+        o_freq = offset_sequence_embedding(o / 10, self.frequency_embedding_size)
+        xoc = torch.concatenate((x_freq, o_freq, c), -1)
+        xoc_emb = self.mlp(xoc)
+        return xoc_emb
 
 
 class DiT(nn.Module):
@@ -194,7 +195,7 @@ class DiT(nn.Module):
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.num_heads = num_heads
 
-        self.xc_embedder = FirstLayer(hidden_size, context_size, in_channels)
+        self.xoc_embedder = FirstLayer(hidden_size, context_size, in_channels)
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.y_embedder = LabelEmbedder(num_classes, hidden_size, class_dropout_prob)
 
@@ -214,7 +215,7 @@ class DiT(nn.Module):
         self.apply(_basic_init)
 
         # Initialize position embedding MLP:
-        nn.init.normal_(self.xc_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.xoc_embedder.mlp[0].weight, std=0.02)
 
         # Initialize label embedding table:
         nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
@@ -234,17 +235,18 @@ class DiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x, t, c, y, attn_mask=None):
+    def forward(self, x, t, o, c, y, attn_mask=None):
         """
         Forward pass of DiT.
         x: (N, C, T) tensor of sequence inputs
         t: (N) tensor of diffusion timesteps
+        o: (N, T) tensor of sequence offsets in milliseconds
         c: (N, E, T) tensor of sequence context
         y: (N) tensor of class labels
         """
         x = torch.swapaxes(x, 1, 2)   # (N, T, C)
         c = torch.swapaxes(c, 1, 2)   # (N, T, E)
-        x = self.xc_embedder(x, c)               # (N, T, D), where T = seq_len
+        x = self.xoc_embedder(x, o, c)           # (N, T, D), where T = seq_len
         t = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y, self.training)    # (N, D)
         b = t + y                                # (N, D)
@@ -254,14 +256,14 @@ class DiT(nn.Module):
         x = torch.swapaxes(x, 1, 2)   # (N, out_channels, T)
         return x
 
-    def forward_with_cfg(self, x, t, c, y, cfg_scale, attn_mask=None):
+    def forward_with_cfg(self, x, t, o, c, y, cfg_scale, attn_mask=None):
         """
         Forward pass of DiT, but also batches the unconditional forward pass for classifier-free guidance.
         """
         # https://github.com/openai/glide-text2im/blob/main/notebooks/text2im.ipynb
         half = x[: len(x) // 2]
         combined = torch.cat([half, half], dim=0)
-        model_out = self.forward(combined, t, c, y, attn_mask)
+        model_out = self.forward(combined, t, o, c, y, attn_mask)
         # For exact reproducibility reasons, we apply classifier-free guidance on only
         # three channels by default. The standard approach to cfg applies it to all channels.
         # This can be done by uncommenting the following line and commenting-out the line following that.
