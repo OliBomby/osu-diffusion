@@ -6,8 +6,8 @@ from pathlib import Path
 import torch
 
 
-beatmap_id = int(input("Input beatmap ID: "))
-# beatmap_id = 1345676  # iLLness LiLin
+# beatmap_id = int(input("Input beatmap ID: "))
+beatmap_id = 2116103
 
 p = Path(__file__).parent.with_name('beatmap_idx.pickle')
 with p.open('rb') as f:
@@ -16,7 +16,7 @@ with p.open('rb') as f:
 
 idx = beatmap_idx[beatmap_id]
 
-ckpt = torch.load("D:\\DiT-B-0130000.pt")
+ckpt = torch.load("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s512\\0080000.pt")
 embedding_table = ckpt["ema"]["y_embedder.embedding_table.weight"].cpu()
 
 query = embedding_table[idx]
