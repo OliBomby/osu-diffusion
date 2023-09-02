@@ -124,10 +124,10 @@ class DiTBlock(nn.Module):
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
 
-    def forward(self, x, c):
+    def forward(self, x, c, attn_mask=None):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
         modulated = modulate(self.norm1(x), shift_msa, scale_msa)
-        x = x + gate_msa.unsqueeze(1) * self.attn(modulated, modulated, modulated, need_weights=False)[0]
+        x = x + gate_msa.unsqueeze(1) * self.attn(modulated, modulated, modulated, need_weights=False, attn_mask=attn_mask)[0]
         x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
@@ -234,7 +234,7 @@ class DiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x, t, c, y):
+    def forward(self, x, t, c, y, attn_mask=None):
         """
         Forward pass of DiT.
         x: (N, C, T) tensor of sequence inputs
@@ -249,19 +249,19 @@ class DiT(nn.Module):
         y = self.y_embedder(y, self.training)    # (N, D)
         b = t + y                                # (N, D)
         for block in self.blocks:
-            x = block(x, b)                      # (N, T, D)
+            x = block(x, b, attn_mask)           # (N, T, D)
         x = self.final_layer(x, b)               # (N, T, out_channels)
         x = torch.swapaxes(x, 1, 2)   # (N, out_channels, T)
         return x
 
-    def forward_with_cfg(self, x, t, c, y, cfg_scale):
+    def forward_with_cfg(self, x, t, c, y, cfg_scale, attn_mask=None):
         """
         Forward pass of DiT, but also batches the unconditional forward pass for classifier-free guidance.
         """
         # https://github.com/openai/glide-text2im/blob/main/notebooks/text2im.ipynb
         half = x[: len(x) // 2]
         combined = torch.cat([half, half], dim=0)
-        model_out = self.forward(combined, t, c, y)
+        model_out = self.forward(combined, t, c, y, attn_mask)
         # For exact reproducibility reasons, we apply classifier-free guidance on only
         # three channels by default. The standard approach to cfg applies it to all channels.
         # This can be done by uncommenting the following line and commenting-out the line following that.

@@ -39,7 +39,7 @@ def main(args):
 
     seq_no_embed = beatmap_to_sequence(beatmap)
 
-    if args.plot_time is not None:
+    if args.plot_time is not None and False:
         # noinspection PyTypeChecker
         start_index = torch.nonzero(seq_no_embed[2] >= args.plot_time)[0]
         seq_no_embed = seq_no_embed[:, start_index:start_index + args.seq_len]
@@ -57,6 +57,11 @@ def main(args):
     model.load_state_dict(state_dict)
     model.eval()  # important!
     diffusion = create_diffusion(str(args.num_sampling_steps))
+
+    # Create banded matrix attention mask for increased sequence length
+    attn_mask = torch.full((seq_len, seq_len), True, dtype=torch.bool, device=device)
+    for i in range(seq_len):
+        attn_mask[max(0, i - args.seq_len):min(seq_len, i + args.seq_len), i] = False
 
     # Labels to condition the model with (feel free to change):
     if args.style_id is not None:
@@ -78,7 +83,7 @@ def main(args):
     c = torch.cat([c, c], 0)
     y_null = torch.tensor([args.num_classes] * n, device=device)
     y = torch.cat([y, y_null], 0)
-    model_kwargs = dict(c=c, y=y, cfg_scale=args.cfg_scale)
+    model_kwargs = dict(c=c, y=y, cfg_scale=args.cfg_scale, attn_mask=attn_mask)
 
     # Sample images:
     sampled_seq = None
@@ -127,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--cfg-scale", type=float, default=1.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--seq-len", type=int, default=128)
+    parser.add_argument("--seq-len", type=int, default=512)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
