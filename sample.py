@@ -109,11 +109,10 @@ def main(args):
             new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result {i}.osu"))
 
             fig, ax = plt.subplots()
+            plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
             ax.axis('equal')
             ax.set_xlim([0, 512])
             ax.set_ylim([384, 0])
-            plt.cla()
-            plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
             plt.show()
         except Exception as e:
             print(e)

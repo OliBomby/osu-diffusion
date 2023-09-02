@@ -145,7 +145,7 @@ def new_difficulty(ref_beatmap: Beatmap, version: str, hit_objects: list[HitObje
 
 
 def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
-    width = beatmap.cs() * 4
+    width = beatmap.cs() * 8
     hit_objects = beatmap.hit_objects(spinners=False)
     min_time, max_time = timedelta(seconds=(time - window_size) / 1000), timedelta(seconds=(time + window_size) / 1000)
     windowed = [ho for ho in hit_objects if min_time < ho.time < max_time]
