@@ -30,7 +30,7 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
         if type_index == 1:
             hit_objects.append(Circle(pos, time, True, 0, 0))
         elif type_index == 2:
-            curr_object = Spinner(pos, time, False, 0, time)
+            curr_object = Spinner(pos, time, True, 0, time)
         elif type_index == 3 and isinstance(curr_object, Spinner):
             curr_object.end_time = time
             hit_objects.append(curr_object)
