@@ -111,7 +111,8 @@ def main(args):
     # Create model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size
+        context_size=context_size,
+        class_dropout_prob=0.2,
     )
     # Note that parameter initialization is done within the DiT constructor
     ema: torch.nn.Module = deepcopy(model).to(device)  # Create an EMA of the model for use after training
