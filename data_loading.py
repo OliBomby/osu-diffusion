@@ -164,7 +164,7 @@ class BeatmapDatasetIterable:
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
         x = self.current_seq_x[:, self.seq_index:self.seq_index + self.seq_len]
-        o = self.current_seq_o[self.seq_index:self.seq_index + self.seq_len] - self.current_seq_o[self.seq_index]  # Normalize to relative time
+        o = self.current_seq_o[self.seq_index:self.seq_index + self.seq_len] - self.current_seq_o[self.seq_index] + random.random() * 100000  # Obscure the absolute time
         c = self.current_seq_c[:, self.seq_index:self.seq_index + self.seq_len]
         self.seq_index += self.stride
         return x, o, c, self.current_idx
