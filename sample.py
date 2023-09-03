@@ -39,7 +39,7 @@ def main(args):
 
     seq_no_embed = beatmap_to_sequence(beatmap)
 
-    if args.plot_time is not None and False:
+    if args.plot_time is not None:
         # noinspection PyTypeChecker
         start_index = torch.nonzero(seq_no_embed[2] >= args.plot_time)[0]
         seq_no_embed = seq_no_embed[:, start_index:start_index + args.seq_len]
@@ -47,7 +47,7 @@ def main(args):
 
     seq_len = seq_no_embed.shape[1]
     seq_x, seq_o, seq_c = split_and_process_sequence(seq_no_embed)
-    seq_o -= seq_o[0]  # Normalize to relative time
+    seq_o = seq_o - seq_o[0]  # Normalize to relative time
 
     # Load model:
     model = DiT_models[args.model](
@@ -116,12 +116,13 @@ def main(args):
             new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
             new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result {i}.osu"))
 
-            fig, ax = plt.subplots()
-            plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
-            ax.axis('equal')
-            ax.set_xlim([0, 512])
-            ax.set_ylim([384, 0])
-            plt.show()
+            if args.plot_time is not None:
+                fig, ax = plt.subplots()
+                plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
+                ax.axis('equal')
+                ax.set_xlim([0, 512])
+                ax.set_ylim([384, 0])
+                plt.show()
         except Exception as e:
             print(e)
 
@@ -135,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument("--cfg-scale", type=float, default=1.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--seq-len", type=int, default=512)
+    parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
