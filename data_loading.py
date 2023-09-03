@@ -164,7 +164,10 @@ class BeatmapDatasetIterable:
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
         x = self.current_seq_x[:, self.seq_index:self.seq_index + self.seq_len]
-        o = self.current_seq_o[self.seq_index:self.seq_index + self.seq_len] - self.current_seq_o[self.seq_index] + random.random() * 100000  # Obscure the absolute time
+        # Obscure the absolute time by normalizing to zero and adding a random offset between zero and the max period
+        # We do this to make sure the offset embedding utilizes the full range of values, which is also the case when sampling the model
+        o = (self.current_seq_o[self.seq_index:self.seq_index + self.seq_len]
+             - self.current_seq_o[self.seq_index] + random.random() * 100000)
         c = self.current_seq_c[:, self.seq_index:self.seq_index + self.seq_len]
         self.seq_index += self.stride
         return x, o, c, self.current_idx
