@@ -18,4 +18,5 @@
 module load cuda
 module load python/3.11.4
 # Run the executable
+export PATH=~/.local/bin:$PATH
 torchrun --nproc-per-node=4 train.py --data-path "../ORS13402_no_audio" --model DiT-XL --num-workers 12 --epochs 100 --global-batch-size 256 --ckpt-every 20000 --seq-len 128
