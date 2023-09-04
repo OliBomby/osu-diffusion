@@ -3,10 +3,18 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[[source]]
+url = "https://download.pytorch.org/whl/cu117"
+verify_ssl = true
+name = "downloadpytorch"
+
 [packages]
-torch = "*"
-torchvision = "*"
-torchaudio = "*"
+torch = {version = "*", index = "pypi", sys_platform = "linux"}
+torchvision = {version = "*", index = "pypi", sys_platform = "linux"}
+torchaudio = {version = "*", index = "pypi", sys_platform = "linux"}
+torch = {version = "*", index = "downloadpytorch", sys_platform = "win32"}
+torchvision = {version = "*", index = "downloadpytorch", sys_platform = "win32"}
+torchaudio = {version = "*", index = "downloadpytorch", sys_platform = "win32"}
 scipy = "*"
 matplotlib = "*"
 tqdm = "*"
