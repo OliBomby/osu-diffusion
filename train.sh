@@ -2,6 +2,9 @@
 #
 # Grid Engine options (lines prefixed with #$)
 #
+# Set name of job
+#$ -N osu-diffusion-training
+#
 # Set working directory to the directory where the job is submitted from:
 #$ -cwd
 #
@@ -13,6 +16,11 @@
 # the total system RAM available to the job is the value specified here multiplied by
 # the number of requested GPUs (above)
 #$ -l h_vmem=8G
+#
+# Log file
+#$ -o train.log
+#$ -e train.err
+#
 # Initialise the environment modules and load CUDA version 11.0.2
 . /etc/profile.d/modules.sh
 module load cuda
