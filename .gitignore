@@ -3,3 +3,4 @@ results/
 /embeddings/2d-embs.npy
 Pipfile.lock
 .venv/
+logs/

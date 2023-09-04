@@ -18,8 +18,8 @@
 #$ -l h_vmem=8G
 #
 # Log file
-#$ -o train.log
-#$ -e train.err
+#$ -o logs/train.log
+#$ -e logs/train.err
 #
 # Initialise the environment modules and load CUDA version 11.0.2
 . /etc/profile.d/modules.sh
