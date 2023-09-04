@@ -1,1 +1,1 @@
-python .\osu-diffusion\sample.py --ckpt .\0240000.pt %*
+python .\sample.py --ckpt ..\0240000.pt %*
