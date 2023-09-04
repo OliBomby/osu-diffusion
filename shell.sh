@@ -1,6 +1,6 @@
 #!/bin/bash
 
-$ -cwd
+#$ -cwd
 
 . /etc/profile.d/modules.sh
 module load python/3.11.4
