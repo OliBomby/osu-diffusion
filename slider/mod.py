@@ -4,8 +4,8 @@ from .bit_enum import BitEnum
 
 
 class Mod(BitEnum):
-    """The mods in osu!
-    """
+    """The mods in osu!"""
+
     no_fail = 1
     easy = 1 << 1
     no_video = 1 << 2  # not a mod anymore
@@ -54,26 +54,26 @@ class Mod(BitEnum):
             The mod mask.
         """
         if len(cs) % 2 != 0:
-            raise ValueError(f'malformed mods: {cs!r}')
+            raise ValueError(f"malformed mods: {cs!r}")
 
         cs = cs.lower()
         mapping = {
-            'ez': cls.easy,
-            'hr': cls.hard_rock,
-            'ht': cls.half_time,
-            'dt': cls.double_time,
-            'hd': cls.hidden,
-            'fl': cls.flashlight,
-            'so': cls.spun_out,
-            'nf': cls.no_fail,
+            "ez": cls.easy,
+            "hr": cls.hard_rock,
+            "ht": cls.half_time,
+            "dt": cls.double_time,
+            "hd": cls.hidden,
+            "fl": cls.flashlight,
+            "so": cls.spun_out,
+            "nf": cls.no_fail,
         }
 
         mod = 0
         for n in range(0, len(cs), 2):
             try:
-                mod |= mapping[cs[n:n + 2]]
+                mod |= mapping[cs[n : n + 2]]
             except KeyError:
-                raise ValueError(f'unknown mod: {cs[n:n + 2]!r}')
+                raise ValueError(f"unknown mod: {cs[n:n + 2]!r}")
 
         return mod
 
@@ -149,7 +149,7 @@ def circle_radius(cs):
     return (512 / 16) * (1 - 0.7 * (cs - 5) / 5)
 
 
-class HitWindows(namedtuple('HitWindows', 'hit_300, hit_100, hit_50')):
+class HitWindows(namedtuple("HitWindows", "hit_300, hit_100, hit_50")):
     """Times to hit an object at various accuracies
 
     Parameters

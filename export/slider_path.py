@@ -1,5 +1,6 @@
-from numpy.linalg import norm
 import numpy as np
+from numpy.linalg import norm
+
 import export.path_approximator as path_approximator
 
 
@@ -106,11 +107,19 @@ class SliderPath:
         for i in range(len(self.get_control_points())):
             end += 1
 
-            if i == len(self.get_control_points()) - 1 or (self.get_control_points()[i] == self.get_control_points()[i + 1]).all():
+            if (
+                i == len(self.get_control_points()) - 1
+                or (
+                    self.get_control_points()[i] == self.get_control_points()[i + 1]
+                ).all()
+            ):
                 cp_span = self.get_control_points()[start:end]
 
                 for t in self.calculate_subpath(cp_span):
-                    if len(self.calculatedPath) == 0 or (self.calculatedPath[-1] != t).any():
+                    if (
+                        len(self.calculatedPath) == 0
+                        or (self.calculatedPath[-1] != t).any()
+                    ):
                         self.calculatedPath.append(t)
 
                 start = end
@@ -126,8 +135,10 @@ class SliderPath:
             d = norm(diff)
 
             if self.expectedDistance is not None and self.expectedDistance - length < d:
-                self.calculatedPath[i + 1] = self.calculatedPath[i] + diff * (self.expectedDistance - length) / d
-                del self.calculatedPath[i + 2:len(self.calculatedPath) - 2 - i]
+                self.calculatedPath[i + 1] = (
+                    self.calculatedPath[i] + diff * (self.expectedDistance - length) / d
+                )
+                del self.calculatedPath[i + 2 : len(self.calculatedPath) - 2 - i]
 
                 length = self.expectedDistance
                 self.cumulativeLength.append(length)
@@ -136,14 +147,20 @@ class SliderPath:
             length += d
             self.cumulativeLength.append(length)
 
-        if self.expectedDistance is not None and length < self.expectedDistance and len(self.calculatedPath) > 1:
+        if (
+            self.expectedDistance is not None
+            and length < self.expectedDistance
+            and len(self.calculatedPath) > 1
+        ):
             diff = self.calculatedPath[-1] - self.calculatedPath[-2]
             d = norm(diff)
 
             if d <= 0:
                 return
 
-            self.calculatedPath[-1] += diff * (self.expectedDistance - self.cumulativeLength[-1]) / d
+            self.calculatedPath[-1] += (
+                diff * (self.expectedDistance - self.cumulativeLength[-1]) / d
+            )
             self.cumulativeLength[-1] = self.expectedDistance
 
     def index_of_distance(self, d):
@@ -179,12 +196,15 @@ class SliderPath:
 
 
 if __name__ == "__main__":
-    path = SliderPath("Bezier", 100 * np.array([[0, 0], [1, 1], [1, -1], [2, 0], [2, 0], [3, -1], [2, -2]]))
+    path = SliderPath(
+        "Bezier",
+        100 * np.array([[0, 0], [1, 1], [1, -1], [2, 0], [2, 0], [3, -1], [2, -2]]),
+    )
     p = np.vstack(path.calculatedPath)
     print(p.shape)
 
     import matplotlib.pyplot as plt
 
-    plt.axis('equal')
+    plt.axis("equal")
     plt.plot(p[:, 0], p[:, 1], color="green")
     plt.show()

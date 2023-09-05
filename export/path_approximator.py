@@ -11,7 +11,8 @@ length_squared = lambda x: np.inner(x, x)
 def approximate_bezier(control_points):
     return approximate_b_spline(control_points)
 
-def approximate_b_spline(control_points, p = 0):
+
+def approximate_b_spline(control_points, p=0):
     output = []
     n = len(control_points) - 1
 
@@ -38,7 +39,7 @@ def approximate_b_spline(control_points, p = 0):
             sub_bezier[p] = points[i + 1]
             to_flatten.append(sub_bezier)
 
-        to_flatten.append(points[(n - p):])
+        to_flatten.append(points[(n - p) :])
         to_flatten.reverse()
     else:
         p = n
@@ -53,12 +54,20 @@ def approximate_b_spline(control_points, p = 0):
         parent = to_flatten.pop()
 
         if bezier_is_flat_enough(parent):
-            bezierApproximate(parent, output, subdivision_buffer1, subdivision_buffer2, p + 1)
+            bezierApproximate(
+                parent,
+                output,
+                subdivision_buffer1,
+                subdivision_buffer2,
+                p + 1,
+            )
 
             free_buffers.append(parent)
             continue
 
-        right_child = free_buffers.pop() if len(free_buffers) > 0 else np.empty([p + 1, 2])
+        right_child = (
+            free_buffers.pop() if len(free_buffers) > 0 else np.empty([p + 1, 2])
+        )
         bezier_subdivide(parent, left_child, right_child, subdivision_buffer1, p + 1)
 
         for i in range(p + 1):
@@ -129,7 +138,16 @@ def approximate_circular_arc(control_points):
         direction = -direction
         theta_range = 2 * np.pi - theta_range
 
-    amount_points = 2 if 2 * r <= CIRCULAR_ARC_TOLERANCE else int(max(2, np.ceil(theta_range / (2 * np.arccos(1 - CIRCULAR_ARC_TOLERANCE / r)))))
+    amount_points = (
+        2
+        if 2 * r <= CIRCULAR_ARC_TOLERANCE
+        else int(
+            max(
+                2,
+                np.ceil(theta_range / (2 * np.arccos(1 - CIRCULAR_ARC_TOLERANCE / r))),
+            ),
+        )
+    )
 
     output = []
 
@@ -174,7 +192,13 @@ def bezier_subdivide(control_points, l, r, subdivision_buffer, count):
             midpoints[j] = (midpoints[j] + midpoints[j + 1]) / 2
 
 
-def bezierApproximate(control_points, output, subdivision_buffer1, subdivision_buffer2, count):
+def bezierApproximate(
+    control_points,
+    output,
+    subdivision_buffer1,
+    subdivision_buffer2,
+    count,
+):
     l = subdivision_buffer2
     r = subdivision_buffer1
 
@@ -195,9 +219,23 @@ def catmull_find_point(vec1, vec2, vec3, vec4, t):
     t2 = t * t
     t3 = t * t2
 
-    result = np.array([
-        0.5 * (2 * vec2[0] + (-vec1[0] + vec3[0]) * t + (2 * vec1[0] - 5 * vec2[0] + 4 * vec3[0] - vec4[0]) * t2 + (-vec1[0] + 3 * vec2[0] - 3 * vec3[0] + vec4[0]) * t3),
-        0.5 * (2 * vec2[1] + (-vec1[1] + vec3[1]) * t + (2 * vec1[1] - 5 * vec2[1] + 4 * vec3[1] - vec4[1]) * t2 + (-vec1[1] + 3 * vec2[1] - 3 * vec3[1] + vec4[1]) * t3)
-    ])
+    result = np.array(
+        [
+            0.5
+            * (
+                2 * vec2[0]
+                + (-vec1[0] + vec3[0]) * t
+                + (2 * vec1[0] - 5 * vec2[0] + 4 * vec3[0] - vec4[0]) * t2
+                + (-vec1[0] + 3 * vec2[0] - 3 * vec3[0] + vec4[0]) * t3
+            ),
+            0.5
+            * (
+                2 * vec2[1]
+                + (-vec1[1] + vec3[1]) * t
+                + (2 * vec1[1] - 5 * vec2[1] + 4 * vec3[1] - vec4[1]) * t2
+                + (-vec1[1] + 3 * vec2[1] - 3 * vec3[1] + vec4[1]) * t3
+            ),
+        ],
+    )
 
     return result

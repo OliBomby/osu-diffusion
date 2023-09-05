@@ -2,9 +2,8 @@
 #     GLIDE: https://github.com/openai/glide-text2im/blob/main/glide_text2im/gaussian_diffusion.py
 #     ADM:   https://github.com/openai/guided-diffusion/blob/main/guided_diffusion
 #     IDDPM: https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/gaussian_diffusion.py
-
-import torch as th
 import numpy as np
+import torch as th
 
 
 def normal_kl(mean1, logvar1, mean2, logvar2):
@@ -22,10 +21,10 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
 
     # Force variances to be Tensors. Broadcasting helps convert scalars to
     # Tensors, but it does not work for th.exp().
-    logvar1, logvar2 = [
+    logvar1, logvar2 = (
         x if isinstance(x, th.Tensor) else th.tensor(x).to(tensor)
         for x in (logvar1, logvar2)
-    ]
+    )
 
     return 0.5 * (
         -1.0
@@ -55,7 +54,9 @@ def continuous_gaussian_log_likelihood(x, *, means, log_scales):
     centered_x = x - means
     inv_stdv = th.exp(-log_scales)
     normalized_x = centered_x * inv_stdv
-    log_probs = th.distributions.Normal(th.zeros_like(x), th.ones_like(x)).log_prob(normalized_x)
+    log_probs = th.distributions.Normal(th.zeros_like(x), th.ones_like(x)).log_prob(
+        normalized_x,
+    )
     return log_probs
 
 

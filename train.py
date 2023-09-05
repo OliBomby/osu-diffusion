@@ -1,7 +1,6 @@
 """
 A minimal training script for DiT using PyTorch DDP.
 """
-
 import torch
 
 # the first flag below was False when we tested this script but True makes A100 training a lot faster:
@@ -27,6 +26,7 @@ from data_loading import get_processed_data_loader, context_size
 #################################################################################
 #                             Training Helper Functions                         #
 #################################################################################
+
 
 @torch.no_grad()
 def update_ema(ema_model, model, decay=0.9999):
@@ -62,9 +62,12 @@ def create_logger(logging_dir, rank):
     if rank == 0:  # real logger
         logging.basicConfig(
             level=logging.INFO,
-            format='[\033[34m%(asctime)s\033[0m] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            handlers=[logging.StreamHandler(), logging.FileHandler(f"{logging_dir}/log.txt")]
+            format="[\033[34m%(asctime)s\033[0m] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(f"{logging_dir}/log.txt"),
+            ],
         )
         logger = logging.getLogger(__name__)
     else:  # dummy logger (does nothing)
@@ -77,6 +80,7 @@ def create_logger(logging_dir, rank):
 #                                  Training Loop                                #
 #################################################################################
 
+
 def main(args):
     """
     Trains a new DiT model.
@@ -86,7 +90,9 @@ def main(args):
     # Setup DDP:
     dist.init_process_group(args.dist)
     world_size = dist.get_world_size()
-    assert args.global_batch_size % dist.get_world_size() == 0, f"Batch size must be divisible by world size."
+    assert (
+        args.global_batch_size % dist.get_world_size() == 0
+    ), f"Batch size must be divisible by world size."
     rank = dist.get_rank()
     device = rank % torch.cuda.device_count()
     seed = args.global_seed * world_size + rank
@@ -96,11 +102,19 @@ def main(args):
 
     # Setup an experiment folder:
     if rank == 0:
-        os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
+        os.makedirs(
+            args.results_dir,
+            exist_ok=True,
+        )  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
-        model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
+        model_string_name = args.model.replace(
+            "/",
+            "-",
+        )  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
         experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
-        checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
+        checkpoint_dir = (
+            f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
+        )
         os.makedirs(checkpoint_dir, exist_ok=True)
         logger = create_logger(experiment_dir, rank)
         logger.info(f"Experiment directory created at {experiment_dir}")
@@ -115,10 +129,14 @@ def main(args):
         class_dropout_prob=0.2,
     )
     # Note that parameter initialization is done within the DiT constructor
-    ema: torch.nn.Module = deepcopy(model).to(device)  # Create an EMA of the model for use after training
+    ema: torch.nn.Module = deepcopy(model).to(
+        device,
+    )  # Create an EMA of the model for use after training
     requires_grad(ema, False)
     model = DDP(model.to(device), device_ids=[rank])
-    diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
+    diffusion = create_diffusion(
+        timestep_respacing="",
+    )  # default: 1000 steps, linear noise schedule
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
@@ -144,18 +162,26 @@ def main(args):
         num_workers=args.num_workers,
         shuffle=True,
         pin_memory=True,
-        drop_last=True
+        drop_last=True,
     )
-    logger.info(f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
+    logger.info(
+        f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})",
+    )
 
     # Prepare models for training:
-    update_ema(ema, model.module, decay=0)  # Ensure EMA is initialized with synced weights
+    update_ema(
+        ema,
+        model.module,
+        decay=0,
+    )  # Ensure EMA is initialized with synced weights
     model.train()  # important! This enables embedding dropout for classifier-free guidance
     ema.eval()  # EMA model should always be in eval mode
 
     # Load checkpoint
     if args.ckpt is not None:
-        assert os.path.isfile(args.ckpt), f'Could not find DiT checkpoint at {args.ckpt}'
+        assert os.path.isfile(
+            args.ckpt,
+        ), f"Could not find DiT checkpoint at {args.ckpt}"
         checkpoint = torch.load(args.ckpt, map_location=lambda storage, loc: storage)
         model.module.load_state_dict(checkpoint["model"])
         ema.load_state_dict(checkpoint["ema"])
@@ -178,7 +204,11 @@ def main(args):
             c = c.to(device)
             y = y.to(device)
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
-            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=args.use_amp):
+            with torch.autocast(
+                device_type="cuda",
+                dtype=torch.float16,
+                enabled=args.use_amp,
+            ):
                 model_kwargs = dict(o=o, c=c, y=y)
                 loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
                 loss = loss_dict["loss"].mean()
@@ -201,7 +231,9 @@ def main(args):
                 avg_loss = torch.tensor(running_loss / log_steps, device=device)
                 dist.all_reduce(avg_loss, op=dist.ReduceOp.SUM)
                 avg_loss = avg_loss.item() / world_size
-                logger.info(f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
+                logger.info(
+                    f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}",
+                )
                 # Reset monitoring variables:
                 running_loss = 0
                 log_steps = 0
@@ -215,7 +247,7 @@ def main(args):
                         "ema": ema.state_dict(),
                         "opt": opt.state_dict(),
                         "scaler": scaler.state_dict(),
-                        "args": args
+                        "args": args,
                     }
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
                     torch.save(checkpoint, checkpoint_path)
@@ -237,7 +269,12 @@ if __name__ == "__main__":
     parser.add_argument("--data-end", type=int, default=13402)
     parser.add_argument("--data-start", type=int, default=0)
     parser.add_argument("--results-dir", type=str, default="results")
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-B")
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=list(DiT_models.keys()),
+        default="DiT-B",
+    )
     parser.add_argument("--epochs", type=int, default=1400)
     parser.add_argument("--global-batch-size", type=int, default=256)
     parser.add_argument("--global-seed", type=int, default=0)

@@ -1,5 +1,6 @@
 import torch
 
+
 def print_state_dict(obj):
     for param_tensor in obj:
         param = obj[param_tensor] if isinstance(obj, dict) else param_tensor

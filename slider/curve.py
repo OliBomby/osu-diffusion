@@ -1,8 +1,10 @@
 import bisect
 import math
-from itertools import accumulate, chain
+from itertools import accumulate
+from itertools import chain
 
 import numpy as np
+
 try:  # SciPy >= 0.19
     from scipy.special import comb
 except ImportError:
@@ -24,19 +26,20 @@ class Curve(metaclass=ABCMeta):
     req_length : float
         The pixel length of the curve.
     """
+
     def __init__(self, points, req_length):
         self.points = points
         self.req_length = req_length
 
     @classmethod
     def from_kind_and_points(cls, kind, points, req_length):
-        if kind == 'B':
+        if kind == "B":
             return MultiBezier(points, req_length)
-        if kind == 'L':
+        if kind == "L":
             return Linear(points, req_length)
-        if kind == 'C':
+        if kind == "C":
             return Catmull(points, req_length)
-        if kind == 'P':
+        if kind == "P":
             if len(points) != 3:
                 # it seems osu! uses the bezier curve if there are more than 3
                 # points
@@ -52,7 +55,7 @@ class Curve(metaclass=ABCMeta):
 
             return Perfect(points, req_length, _center=center)
 
-        raise ValueError(f'unknown curve kind: {kind!r}')
+        raise ValueError(f"unknown curve kind: {kind!r}")
 
     @abstractmethod
     def __call__(self, t):
@@ -68,7 +71,7 @@ class Curve(metaclass=ABCMeta):
         position : Position
             The position of the curve.
         """
-        raise NotImplementedError('__call__')
+        raise NotImplementedError("__call__")
 
     def pack(self):
         """The packed string representing this curve in ``.osu`` file,
@@ -81,24 +84,29 @@ class Curve(metaclass=ABCMeta):
             The packed str of this curve.
         """
         if isinstance(self, Catmull):
-            kind = 'C'
+            kind = "C"
         elif isinstance(self, Linear):
-            kind = 'L'
+            kind = "L"
         elif isinstance(self, Perfect):
-            kind = 'P'
+            kind = "P"
         else:
             # Bezier
-            kind = 'B'
+            kind = "B"
         # The first point is specified at the beginning of
         # HitObject's packed str and should not be included here
-        return '|'.join(chain([kind],
-                              (str(int(point.x)) + ':' + str(int(point.y))
-                               for point in self.points[1:])))
+        return "|".join(
+            chain(
+                [kind],
+                (
+                    str(int(point.x)) + ":" + str(int(point.y))
+                    for point in self.points[1:]
+                ),
+            ),
+        )
 
     @lazyval
     def hard_rock(self):
-        """This curve when played with hard rock.
-        """
+        """This curve when played with hard rock."""
         return type(self)(
             [Position(p.x, 384 - p.y) for p in self.points],
             self.req_length,
@@ -115,6 +123,7 @@ class Bezier(Curve):
     req_length : float
         The pixel length of the curve.
     """
+
     def __init__(self, points, req_length):
         super().__init__(points, req_length)
         self._coordinates = np.array(points).T
@@ -146,19 +155,14 @@ class Bezier(Curve):
         n = len(points) - 1
         ixs = np.arange(n + 1)
         return np.sum(
-            (
-                comb(n, ixs) *
-                (1 - t) ** (n - ixs) *
-                t ** ixs
-            )[:, np.newaxis] *
-            self._coordinates,
+            (comb(n, ixs) * (1 - t) ** (n - ixs) * t**ixs)[:, np.newaxis]
+            * self._coordinates,
             axis=-1,
         )
 
     @lazyval
     def length(self):
-        """Approximates length as piecewise linear function.
-        """
+        """Approximates length as piecewise linear function."""
         # NOTE: if the error is high, try increasing the samples
         points = self.at(np.linspace(0, 1, 50))
         return np.sum(
@@ -179,6 +183,7 @@ class _MetaCurveMixin:
     Implementers must provide a ``_curves`` attribute which is the collection
     of curves.
     """
+
     @lazyval
     def _ts(self):
         lengths = [c.length for c in self._curves]
@@ -222,12 +227,12 @@ class MultiBezier(_MetaCurveMixin, Curve):
     req_length : float
         The pixel length of the curve.
     """
+
     def __init__(self, points, req_length):
         super().__init__(points, req_length)
 
         self._curves = [
-            Bezier(subpoints, None)
-            for subpoints in self._split_at_dupes(points)
+            Bezier(subpoints, None) for subpoints in self._split_at_dupes(points)
         ]
 
     @staticmethod
@@ -265,6 +270,7 @@ class Linear(_MetaCurveMixin, Curve):
     req_length : float
         The pixel length of the curve.
     """
+
     def __init__(self, points, req_length):
         super().__init__(points, req_length)
 
@@ -284,6 +290,7 @@ class Perfect(Curve):
     req_length : float
         The pixel length of the curve.
     """
+
     def __init__(self, points, req_length, *, _center=None):
         # NOTE: _center exists as an optimization to not recompute the center
         # of the circle when calling ``Curve.from_kind_and_points``.
@@ -317,8 +324,7 @@ class Perfect(Curve):
             self._angle = -(2 * math.pi - self._angle)
 
         length = abs(
-            self._angle *
-            math.sqrt(coordinates[0][0] ** 2 + coordinates[0][1] ** 2),
+            self._angle * math.sqrt(coordinates[0][0] ** 2 + coordinates[0][1] ** 2),
         )
         if length > req_length:
             self._angle *= req_length / length
@@ -331,15 +337,13 @@ class Catmull(Curve):
     """Catmull curves implement the Catmull-Rom spline algorithm for defining
     the path.
     """
+
     def __init__(self, points, req_length):
         super().__init__(points, req_length)
         points = np.array(points)
 
         # implementation follows notes at https://cubic.org/docs/hermite.htm
-        self.h = np.array([[2,  -2,  1,  1],
-                           [-3,  3, -2, -1],
-                           [0,   0,  1,  0],
-                           [1,   0,  0,  0]])
+        self.h = np.array([[2, -2, 1, 1], [-3, 3, -2, -1], [0, 0, 1, 0], [1, 0, 0, 0]])
 
         tangents_x = []
         tangents_y = []
@@ -385,7 +389,7 @@ class Catmull(Curve):
 
         # we interpolate x and y separately, so track their tangents in two
         # separate lists.
-        for (p_ahead, p_behind) in zip(p_aheads, p_behinds):
+        for p_ahead, p_behind in zip(p_aheads, p_behinds):
             tangent = 0.5 * (p_ahead[0] - p_behind[0])
             tangents_x.append(tangent)
 
@@ -395,15 +399,19 @@ class Catmull(Curve):
         # for each curve we consider its start and end point (and start and end
         # tangent). This means the number of curves will be one less than the
         # number of points.
-        for ((p1, p2), (t1, t2)) in zip(zip(points, points[1:]),
-                                        zip(tangents_x, tangents_x[1:])):
+        for (p1, p2), (t1, t2) in zip(
+            zip(points, points[1:]),
+            zip(tangents_x, tangents_x[1:]),
+        ):
             Cx = np.array([p1[0], p2[0], t1, t2])
             # make it a column vector
             Cx = Cx[:, np.newaxis]
             self.Cxs.append(Cx)
 
-        for ((p1, p2), (t1, t2)) in zip(zip(points, points[1:]),
-                                        zip(tangents_y, tangents_y[1:])):
+        for (p1, p2), (t1, t2) in zip(
+            zip(points, points[1:]),
+            zip(tangents_y, tangents_y[1:]),
+        ):
             Cy = np.array([p1[1], p2[1], t1, t2])
             # make it a column vector
             Cy = Cy[:, np.newaxis]
@@ -418,7 +426,7 @@ class Catmull(Curve):
 
         # for consistency with website notes linked above
         s = t
-        S = np.array([s ** 3, s ** 2, s, 1])
+        S = np.array([s**3, s**2, s, 1])
         # catmull curves are made up of a number of individual curves. Assuming
         # osu! weights each curve equally (that is, each curve takes an equal
         # amount of time to traverse regardless of its size), we can get the
@@ -468,7 +476,7 @@ def get_center(a, b, c):
     c_squared = np.sum(np.square(a - b))
 
     if np.isclose([a_squared, b_squared, c_squared], 0).any():
-        raise ValueError(f'given points are collinear: {a}, {b}, {c}')
+        raise ValueError(f"given points are collinear: {a}, {b}, {c}")
 
     s = a_squared * (b_squared + c_squared - a_squared)
     t = b_squared * (a_squared + c_squared - b_squared)
@@ -477,7 +485,7 @@ def get_center(a, b, c):
     sum_ = s + t + u
 
     if np.isclose(sum_, 0):
-        raise ValueError(f'given points are collinear: {a}, {b}, {c}')
+        raise ValueError(f"given points are collinear: {a}, {b}, {c}")
 
     return Position(*(s * a + t * b + u * c) / sum_)
 
