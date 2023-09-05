@@ -46,6 +46,7 @@ def main(args):
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
     seq_len = seq_no_embed.shape[1]
+    print(f"seq len {seq_len}")
     seq_x, seq_o, seq_c = split_and_process_sequence(seq_no_embed)
     seq_o = seq_o - seq_o[0]  # Normalize to relative time
 
