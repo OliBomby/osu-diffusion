@@ -432,19 +432,19 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 #################################################################################
 
 
-def DiT_XL(**kwargs):
+def DiT_XL(**kwargs: dict) -> DiT:
     return DiT(depth=28, hidden_size=1152, num_heads=16, **kwargs)
 
 
-def DiT_L(**kwargs):
+def DiT_L(**kwargs: dict) -> DiT:
     return DiT(depth=24, hidden_size=1024, num_heads=16, **kwargs)
 
 
-def DiT_B(**kwargs):
+def DiT_B(**kwargs: dict) -> DiT:
     return DiT(depth=12, hidden_size=768, num_heads=12, **kwargs)
 
 
-def DiT_S(**kwargs):
+def DiT_S(**kwargs: dict) -> DiT:
     return DiT(depth=12, hidden_size=384, num_heads=6, **kwargs)
 
 

@@ -19,7 +19,7 @@ from slider.curve import MultiBezier
 from slider.curve import Perfect
 
 
-def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
+def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Beatmap:
     seq_len = seq.shape[1]
     hit_objects = []
     timing_points = [tp for tp in ref_beatmap.timing_points if tp.parent is None]
@@ -147,13 +147,13 @@ def create_beatmap(seq, ref_beatmap: Beatmap, version: str):
     return new_difficulty(ref_beatmap, version, hit_objects, timing_points)
 
 
-def slider_path_to_curve(slider_path: SliderPath, req_length: float):
-    points = [Position(p[0], p[1]) for p in slider_path.controlPoints]
+def slider_path_to_curve(slider_path: SliderPath, req_length: float) -> Curve:
+    points = [Position(p[0], p[1]) for p in slider_path.control_points]
 
-    return Curve.from_kind_and_points(slider_path.pathType[0], points, req_length)
+    return Curve.from_kind_and_points(slider_path.path_type[0], points, req_length)
 
 
-def position_to_progress(slider_path: SliderPath, pos: np.ndarray):
+def position_to_progress(slider_path: SliderPath, pos: np.ndarray) -> np.ndarray:
     eps = 1e-4
     lr = 1
     t = 1
@@ -174,7 +174,7 @@ def new_difficulty(
     version: str,
     hit_objects: list[HitObject],
     timing_points: list[TimingPoint],
-):
+) -> Beatmap:
     return Beatmap(
         format_version=ref_beatmap.format_version,
         audio_filename=ref_beatmap.audio_filename,
@@ -212,7 +212,7 @@ def new_difficulty(
     )
 
 
-def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
+def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size) -> list:
     width = beatmap.cs() * 8
     hit_objects = beatmap.hit_objects(spinners=False)
     min_time, max_time = timedelta(seconds=(time - window_size) / 1000), timedelta(
@@ -221,31 +221,36 @@ def plot_beatmap(ax: plt.Axes, beatmap: Beatmap, time, window_size):
     windowed = [ho for ho in hit_objects if min_time < ho.time < max_time]
     artists = []
     for hitobj in windowed:
-        if isinstance(hitobj, Slider):
-            slider_path = SliderPath(
-                "PerfectCurve"
-                if isinstance(hitobj.curve, Perfect)
-                else (
-                    "CatmulL"
-                    if isinstance(hitobj.curve, Catmull)
-                    else ("Linear" if isinstance(hitobj.curve, Linear) else "Bezier")
-                ),
-                np.array(hitobj.curve.points, dtype=float),
-                hitobj.curve.req_length,
-            )
-            path = []
-            slider_path.get_path_to_progress(path, 0, 1)
-            p = np.vstack(path)
-            artists.append(
-                ax.plot(
-                    p[:, 0],
-                    p[:, 1],
-                    color="green",
-                    linewidth=width,
-                    solid_capstyle="round",
-                    solid_joinstyle="round",
-                )[0],
-            )
+        if not isinstance(hitobj, Slider):
+            continue
+
+        path_type = "Bezier"
+        if isinstance(hitobj.curve, Perfect):
+            path_type = "PerfectCurve"
+        elif isinstance(hitobj.curve, Catmull):
+            path_type = "Catmull"
+        elif isinstance(hitobj.curve, Linear):
+            path_type = "Linear"
+
+        slider_path = SliderPath(
+            path_type,
+            np.array(hitobj.curve.points, dtype=float),
+            hitobj.curve.req_length,
+        )
+        path = []
+        slider_path.get_path_to_progress(path, 0, 1)
+        p = np.vstack(path)
+        artists.append(
+            ax.plot(
+                p[:, 0],
+                p[:, 1],
+                color="green",
+                linewidth=width,
+                solid_capstyle="round",
+                solid_joinstyle="round",
+            )[0],
+        )
+
     p = np.array([ho.position for ho in windowed]).reshape((-1, 2))
     artists.append(ax.scatter(p[:, 0], p[:, 1], s=width**2, c="Lime"))
     return artists
