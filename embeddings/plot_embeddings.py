@@ -115,17 +115,17 @@ def plot_region_around(beatmap_id, margin=5.0, **kwargs):
 
 
 def plot_mappers(mappers):
-    regex = "(?!\s?(de\s)?(it|that|" + '|'.join(mappers) + "))(((^|[^\S\r\n])(\S)*([sz]'|'s))|((^|[^\S\r\n])de\s(\S)*))"
+    regex = "(?!\s?(?:de\s)?(?:it|that|" + '|'.join(mappers) + "))(?:(?:(?:^|[^\S\r\n])(?:\S)*(?:[sz]'|'s))|(?:(?:^|[^\S\r\n])de\s(?:\S)*))"
     fig, ax = plot_bg(figsize=(16, 10))
     for i, mapper in enumerate(mappers):
-        m = df[((df["Creator"] == mapper) | df["Difficulty"].str.contains(mapper)) & ~df["Difficulty"].str.contains(regex)]
+        m = df[((df["Source"] == mapper) | df["Difficulty"].str.contains(mapper)) & ~df["Difficulty"].str.contains(regex)]
         marker = str((i%4)+1)
         add_annotations(ax, m.index, label=mapper, alpha=.5, marker=marker, s=150, linewidths=5)
     plt.legend()
 
 
 df = pd.read_pickle("beatmap_df.pkl")
-ckpt = torch.load("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s512\\0080000.pt")
+ckpt = torch.load("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new2\\r\\0240000.pt")
 embedding_table = ckpt["ema"]["y_embedder.embedding_table.weight"]
 
 embs_file = "2d-embs.npy"
@@ -140,6 +140,6 @@ else:
 df['x'] = embs[:, 0]
 df['y'] = embs[:, 1]
 
-mappers = ['olc', 'wafer', 'Fisky', 'Uberzolik', 'over_loadcode', 'Nevo', 'UndeadCapulet']
+mappers = ['wafer', 'Nevo', 'Kroytz', 'Sotarks']
 plot_mappers(mappers)
 plt.show()
