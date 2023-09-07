@@ -1,3 +1,4 @@
+import json
 import math
 import os.path
 import random
@@ -197,7 +198,7 @@ class InterleavingBeatmapDatasetIterable:
 
 
 class BeatmapDataset(IterableDataset):
-    def __init__(self, dataset_path, beatmap_idx, start, end, seq_len, stride=1, cycle_length=1, shuffle=False):
+    def __init__(self, dataset_path, beatmap_idx, start, end, seq_len, stride=1, cycle_length=1, shuffle=False, subset_ids=None):
         super(BeatmapDataset).__init__()
         self.dataset_path = dataset_path
         self.beatmap_idx = beatmap_idx
@@ -207,14 +208,24 @@ class BeatmapDataset(IterableDataset):
         self.stride = stride
         self.cycle_length = cycle_length
         self.shuffle = shuffle
+        self.subset_ids = subset_ids
 
     def _get_beatmap_files(self):
         # Get a list of all beatmap files in the dataset path in the track index range between start and end
         beatmap_files = []
         track_names = ["Track" + str(i).zfill(5) for i in range(self.start, self.end)]
         for track_name in track_names:
-            for beatmap_file in os.listdir(os.path.join(self.dataset_path, track_name, "beatmaps")):
-                beatmap_files.append(os.path.join(self.dataset_path, track_name, "beatmaps", beatmap_file))
+            if self.subset_ids is not None:
+                metadata_File = os.path.join(self.dataset_path, track_name, "metadata.json")
+                with open(metadata_File, 'r') as f:
+                    metadata = json.load(f)
+                for beatmap_name in metadata["Beatmaps"]:
+                    beatmap_metadata = metadata["Beatmaps"][beatmap_name]
+                    if beatmap_metadata['BeatmapId'] in self.subset_ids:
+                        beatmap_files.append(os.path.join(self.dataset_path, track_name, "beatmaps", beatmap_name + '.osu'))
+            else:
+                for beatmap_file in os.listdir(os.path.join(self.dataset_path, track_name, "beatmaps")):
+                    beatmap_files.append(os.path.join(self.dataset_path, track_name, "beatmaps", beatmap_file))
 
         return beatmap_files
 
@@ -249,7 +260,19 @@ def get_beatmap_idx():
     return beatmap_idx
 
 
-def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle_length=1, batch_size=1, num_workers=0, shuffle=False, pin_memory=False, drop_last=False):
+def get_processed_data_loader(dataset_path,
+                              start,
+                              end,
+                              seq_len,
+                              stride=1,
+                              cycle_length=1,
+                              batch_size=1,
+                              num_workers=0,
+                              shuffle=False,
+                              pin_memory=False,
+                              drop_last=False,
+                              subset_ids=None,
+                              ):
     dataset = BeatmapDataset(
         dataset_path=dataset_path,
         beatmap_idx=get_beatmap_idx(),
@@ -258,7 +281,8 @@ def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle
         seq_len=seq_len,
         stride=stride,
         cycle_length=cycle_length,
-        shuffle=shuffle
+        shuffle=shuffle,
+        subset_ids=subset_ids,
     )
     dataloader = DataLoader(
         dataset,
@@ -274,19 +298,24 @@ def get_processed_data_loader(dataset_path, start, end, seq_len, stride=1, cycle
 
 if __name__ == '__main__':
     batch_size = 256
-    num_workers = 16
+    num_workers = 4
+    # batch_size = 1
+    # num_workers = 0
+    # import pandas as pd
+    # subset_ids = pd.read_csv("C:\\Users\\Olivier\\Documents\\GitHub\\osu-diffusion\\results\\tags\\clean_10000.csv")["BeatmapID"].tolist()
     dataloader = get_processed_data_loader(
         dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS13402",
         start = 0,
         end = 13402,
         seq_len = 128,
         stride = 16,
-        cycle_length = 128,
+        cycle_length = 1,
         batch_size = batch_size,
         num_workers = num_workers,
         shuffle = False,
         pin_memory = False,
-        drop_last = True
+        drop_last = True,
+        # subset_ids=subset_ids,
     )
 
     # import matplotlib.pyplot as plt

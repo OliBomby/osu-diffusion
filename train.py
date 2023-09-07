@@ -126,6 +126,11 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
 
     # Setup data:
+    subset_ids = None
+    if args.fine_tune_ids is not None:
+        import pandas as pd
+        subset_ids = pd.read_csv(args.fine_tune_ids)["BeatmapID"].tolist()
+
     global_start = args.data_start
     global_end = args.data_end
     per_rank = int(np.ceil((global_end - global_start) / float(world_size)))
@@ -144,7 +149,8 @@ def main(args):
         num_workers=args.num_workers,
         shuffle=True,
         pin_memory=True,
-        drop_last=True
+        drop_last=True,
+        subset_ids=subset_ids,
     )
     logger.info(f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
 
@@ -249,5 +255,6 @@ if __name__ == "__main__":
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument("--dist", type=str, default="nccl")
+    parser.add_argument("--fine-tune-ids", type=str, default=None)
     args = parser.parse_args()
     main(args)
