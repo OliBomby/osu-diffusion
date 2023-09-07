@@ -124,7 +124,18 @@ def plot_mappers(mappers):
     plt.legend()
 
 
-df = pd.read_pickle("beatmap_df.pkl")
+def plot_tags(tags):
+    fig, ax = plot_bg(figsize=(16, 10))
+    for i, tag in enumerate(tags):
+        m = df[df["omdb"].apply(lambda x: isinstance(x, list) and tag in x)]
+        marker = str((i%4)+1)
+        add_annotations(ax, m.index, label=tag, alpha=.5, marker=marker, s=150, linewidths=5)
+    plt.legend()
+
+
+beatmap_df = pd.read_pickle("beatmap_df.pkl")
+tags_df = pd.read_csv("D:\\Osu! Dingen\\Beatmap ML Datasets\\omdb_tags.csv", names=["BeatmapID", "omdb"]).groupby(["BeatmapID"]).agg(list)
+df = pd.merge(beatmap_df, tags_df, on="BeatmapID", how='left')
 ckpt = torch.load("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new2\\r\\0240000.pt")
 embedding_table = ckpt["ema"]["y_embedder.embedding_table.weight"]
 
@@ -140,6 +151,8 @@ else:
 df['x'] = embs[:, 0]
 df['y'] = embs[:, 1]
 
-mappers = ['wafer', 'Nevo', 'Kroytz', 'Sotarks']
-plot_mappers(mappers)
+# mappers = ['wafer', 'Nevo', 'Kroytz', 'Sotarks']
+# plot_mappers(mappers)
+tags = ['jump aim', 'sharp aim', 'wide aim', 'linear aim', 'aim control', 'flow aim']
+plot_tags(tags)
 plt.show()
