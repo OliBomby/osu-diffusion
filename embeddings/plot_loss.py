@@ -9,6 +9,7 @@ log_files = [
     ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s512\\log.txt", 3200),
     ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new2\\log.txt", 0),
     ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new2\\r\\log.txt", 1600),
+    ("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new2\\clean\\log.txt", 4000),
 ]
 
 for path, x_offset in log_files:
