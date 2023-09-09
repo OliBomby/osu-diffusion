@@ -183,7 +183,7 @@ def main(args):
             o = o.to(device)
             c = c.to(device)
             y = y.to(device)
-            t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
+            t = torch.randint(0, 100, (x.shape[0],), device=device)
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=args.use_amp):
                 model_kwargs = dict(o=o, c=c, y=y)
                 loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
