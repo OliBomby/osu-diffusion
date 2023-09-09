@@ -58,7 +58,7 @@ def main(args):
     state_dict = find_model(args.ckpt)
     model.load_state_dict(state_dict)
     model.eval()  # important!
-    diffusion = create_diffusion(str(args.num_sampling_steps))
+    diffusion = create_diffusion(str(args.num_sampling_steps), noise_schedule="squaredcos_cap_v2")
 
     # Create banded matrix attention mask for increased sequence length
     attn_mask = torch.full((seq_len, seq_len), True, dtype=torch.bool, device=device)
