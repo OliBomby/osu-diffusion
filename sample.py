@@ -98,7 +98,7 @@ def main(args):
         ax.set_ylim([384, 0])
         artists = []
 
-        for samples in diffusion.p_sample_loop_progressive(model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device):
+        for samples in diffusion.p_sample_loop_progressive(model.forward_with_cfg, z.shape, z, clip_denoised=True, model_kwargs=model_kwargs, progress=True, device=device):
             samples, _ = samples["sample"].chunk(2, dim=0)  # Remove null class samples
             sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
             new_beatmap = create_beatmap(sampled_seq[0], beatmap, f"Diffusion {args.style_id}")
@@ -107,7 +107,7 @@ def main(args):
         ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=1000 // 24)
         ani.save(filename=os.path.join(result_dir, "animation.gif"), writer="pillow")
     else:
-        samples = diffusion.p_sample_loop(model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=True, device=device)
+        samples = diffusion.p_sample_loop(model.forward_with_cfg, z.shape, z, clip_denoised=True, model_kwargs=model_kwargs, progress=True, device=device)
         samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
         sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
 

@@ -311,7 +311,7 @@ class GaussianDiffusion:
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                return x.clamp(-1, 1)
+                return x.clamp(-1, 2)
             return x
 
         if self.model_mean_type == ModelMeanType.START_X:
