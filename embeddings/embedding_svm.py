@@ -33,8 +33,11 @@ def get_data(slice, clas):
 
 
 def test_positive(mapper):
-    X_test, y_test = get_data(get_by_mapper(mapper), 1)
+    asdf = get_by_mapper(mapper)
+    X_test, y_test = get_data(asdf, 1)
     y_pred = clf.predict(X_test)
+    asdf["pred"] = y_pred
+    print(asdf[['Title', 'Difficulty', 'pred']])
     scores = []
     for i in range(len(tags)):
         other_tag = tags[i]
@@ -64,8 +67,8 @@ embedding_table = ckpt["ema"]["y_embedder.embedding_table.weight"].cpu()
 
 
 # tags = ['clean', 'messy']
-# tags = ['geometric', 'freeform']
-tags = ['sharp aim', 'wide aim', 'linear aim', 'aim control', 'flow aim']
+tags = ['geometric', 'freeform']
+# tags = ['sharp aim', 'wide aim', 'linear aim', 'aim control', 'flow aim']
 classes = list(range(len(tags)))
 X_train, y_train = get_tags_data(tags, classes)
 clf = svm.SVC(kernel='linear', probability=True)
@@ -98,10 +101,10 @@ clf.fit(X_train, y_train)
 # test_positive("Cheri")
 # test_positive("Uberzolik")
 # test_positive("ScubDomino")
-test_positive("momothx")
-test_positive("Heroine")
-test_positive("Some Hero")
-test_positive("enri")
+# test_positive("momothx")
+# test_positive("Heroine")
+# test_positive("Some Hero")
+test_positive("Venix")
 
 
 # df['clean'] = clf.predict_proba(embedding_table[df.index])[:, 1]
