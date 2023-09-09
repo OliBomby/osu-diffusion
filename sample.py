@@ -91,7 +91,7 @@ def main(args):
 
     # Sample images:
     sampled_seq = None
-    if args.plot_time is not None and False:
+    if args.plot_time is not None and args.make_animation:
         fig, ax = plt.subplots()
         ax.axis('equal')
         ax.set_xlim([0, 512])
@@ -115,7 +115,7 @@ def main(args):
     for i in range(n):
         try:
             new_beatmap = create_beatmap(sampled_seq[i], beatmap, f"Diffusion {args.style_id} {i}")
-            new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result {i}.osu"))
+            new_beatmap.write_path(os.path.join(result_dir, f"{beatmap.beatmap_id} result {args.style_id} {i}.osu"))
 
             if args.plot_time is not None:
                 fig, ax = plt.subplots()
@@ -141,7 +141,11 @@ if __name__ == "__main__":
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
-    parser.add_argument("--plot-width", type=float, default=1000)
+    parser.add_argument("--plot-width", type=float, default=2000)
     parser.add_argument("--num-variants", type=int, default=1)
+    parser.add_argument("--make-animation", type=bool, default=False)
     args = parser.parse_args()
+    # for style_id in [2592760, 1451282, 1995061, 3697057, 2799753, 1772923, 1907310]:
+    #     args.style_id = style_id
+    #     main(args)
     main(args)
