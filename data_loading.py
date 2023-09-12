@@ -68,18 +68,13 @@ def get_data(ho: HitObject):
 
                 if pos == ho.curve.points[i + 1]:
                     datapoints.append(create_datapoint(time, pos, 9))
-                    last_pos = pos
                 elif pos != ho.curve.points[i - 1]:
                     datapoints.append(create_datapoint(time, pos, 6))
-                    last_pos = pos
 
         datapoints.append(create_datapoint(ho.time + duration, ho.curve.points[-1], 10))
-        last_pos = ho.curve.points[-1]
+        datapoints.append(create_datapoint(ho.end_time, ho.curve(1), 11 + repeat_type(ho.repeat)))
 
-        slider_end_pos = ho.curve(1)
-        datapoints.append(create_datapoint(ho.end_time, slider_end_pos, 11 + repeat_type(ho.repeat)))
-
-        return torch.stack(datapoints, 0), slider_end_pos
+        return torch.stack(datapoints, 0)
 
     if isinstance(ho, Spinner):
         return torch.stack((create_datapoint(ho.time, ho.position, 2), create_datapoint(ho.end_time, ho.position, 3)), 0)
@@ -99,18 +94,19 @@ def beatmap_to_sequence(beatmap):
 
 
 def random_flip(seq: torch.Tensor):
-    if torch.rand < 0.5:
+    if random.random() < 0.5:
         seq[0] = 512 - seq[0]
-    if torch.rand < 0.5:
+    if random.random() < 0.5:
         seq[1] = 384 - seq[1]
     return seq
 
 
 def split_and_process_sequence(seq: torch.Tensor):
     offsetted = torch.roll(seq[:2, :], 1, 1)
-    offsetted[:, 0] = (256, 192)
+    offsetted[0, 0] = 256
+    offsetted[1, 0] = 192
     seq_d = torch.linalg.vector_norm(seq[:2, :] - offsetted, ord=2, dim=0)
-    seq_x = random_flip(seq[:2, :]) / playfield_size
+    seq_x = random_flip(seq[:2, :]) / playfield_size.unsqueeze(1)
     seq_o = seq[2, :]
     seq_c = torch.concatenate(
         [
@@ -126,7 +122,7 @@ def window_and_relative_time(seq, s, e):
     x = seq_x[:, s:e]
     # Obscure the absolute time by normalizing to zero and adding a random offset between zero and the max period
     # We do this to make sure the offset embedding utilizes the full range of values, which is also the case when sampling the model
-    o = seq_o[s:e] - seq_o[s] + torch.rand() * 100000
+    o = seq_o[s:e] - seq_o[s] + random.random() * 100000
     c = seq_c[:, s:e]
 
     return x, o, c
@@ -141,6 +137,7 @@ class BeatmapDatasetIterable:
         self.index = 0
         self.current_idx = 0
         self.current_seq = None
+        self.current_seq_len = -1
         self.seq_index = 0
         self.seq_func = seq_func if seq_func is not None else lambda x: x
         self.win_func = win_func if win_func is not None else lambda x, s, e: x[:, s:e]
@@ -149,7 +146,7 @@ class BeatmapDatasetIterable:
         return self
 
     def __next__(self):
-        while self.current_seq is None or self.seq_index + self.seq_len > self.current_seq.shape[1]:
+        while self.current_seq is None or self.seq_index + self.seq_len > self.current_seq_len:
             if self.index >= len(self.beatmap_files):
                 raise StopIteration
 
@@ -158,8 +155,10 @@ class BeatmapDatasetIterable:
             beatmap = Beatmap.from_path(beatmap_path)
 
             self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
-            self.current_seq = self.seq_func(beatmap_to_sequence(beatmap))
-            self.seq_index = torch.randint(0, self.stride - 1)
+            seq = beatmap_to_sequence(beatmap)
+            self.current_seq_len = seq.shape[1]
+            self.current_seq = self.seq_func(seq)
+            self.seq_index = random.randint(0, self.stride - 1)
             self.index += 1
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
@@ -297,10 +296,10 @@ def get_processed_data_loader(dataset_path,
 
 
 if __name__ == '__main__':
-    batch_size = 256
-    num_workers = 4
-    # batch_size = 1
-    # num_workers = 0
+    # batch_size = 256
+    # num_workers = 4
+    batch_size = 1
+    num_workers = 0
     # import pandas as pd
     # subset_ids = pd.read_csv("C:\\Users\\Olivier\\Documents\\GitHub\\osu-diffusion\\results\\tags\\clean_10000.csv")["BeatmapID"].tolist()
     dataloader = get_processed_data_loader(
@@ -320,31 +319,31 @@ if __name__ == '__main__':
         win_func=window_and_relative_time,
     )
 
-    # import matplotlib.pyplot as plt
-    # for x, o, c, y in dataloader:
-    #     x = torch.swapaxes(x, 1, 2)   # (N, T, C)
-    #     c = torch.swapaxes(c, 1, 2)   # (N, T, E)
-    #     print(x.shape, o.shape, c.shape, y.shape)
-    #     batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
-    #     print(batch_pos_emb.shape)
-    #     batch_offset_emb = offset_sequence_embedding(o / 10, 128)
-    #     print(batch_offset_emb.shape)
-    #     print(y)
-    #
-    #     for j in range(batch_size):
-    #         fig, axs = plt.subplots(3, figsize=(5, 30))
-    #         axs[0].imshow(batch_pos_emb[j])
-    #         axs[1].imshow(batch_offset_emb[j])
-    #         axs[2].imshow(c[j])
-    #         print(y[j])
-    #         plt.show()
-    #     break
+    import matplotlib.pyplot as plt
+    for (x, o, c), y in dataloader:
+        x = torch.swapaxes(x, 1, 2)   # (N, T, C)
+        c = torch.swapaxes(c, 1, 2)   # (N, T, E)
+        print(x.shape, o.shape, c.shape, y.shape)
+        batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
+        print(batch_pos_emb.shape)
+        batch_offset_emb = offset_sequence_embedding(o / 10, 128)
+        print(batch_offset_emb.shape)
+        print(y)
 
-    import time
-    import tqdm
-    count = 0
-    start = time.time()
-    for f in tqdm.tqdm(dataloader, total=76200, smoothing=0.01):
-        count += 1
-        # print(f"\r{count}, {count / (time.time() - start)} per second, beatmap index {torch.max(f[1])}", end='')
+        for j in range(batch_size):
+            fig, axs = plt.subplots(3, figsize=(5, 20))
+            axs[0].imshow(batch_pos_emb[j])
+            axs[1].imshow(batch_offset_emb[j])
+            axs[2].imshow(c[j])
+            print(y[j])
+            plt.show()
+        break
+
+    # import time
+    # import tqdm
+    # count = 0
+    # start = time.time()
+    # for f in tqdm.tqdm(dataloader, total=76200, smoothing=0.01):
+    #     count += 1
+    #     # print(f"\r{count}, {count / (time.time() - start)} per second, beatmap index {torch.max(f[1])}", end='')
 
