@@ -101,11 +101,14 @@ def random_flip(seq: torch.Tensor):
     return seq
 
 
-def split_and_process_sequence(seq: torch.Tensor):
-    offsetted = torch.roll(seq[:2, :], 1, 1)
-    offsetted[0, 0] = 256
-    offsetted[1, 0] = 192
-    seq_d = torch.linalg.vector_norm(seq[:2, :] - offsetted, ord=2, dim=0)
+def split_and_process_sequence(beatmap: Beatmap):
+    seq = beatmap_to_sequence(beatmap)
+
+    offset = torch.roll(seq[:2, :], 1, 1)
+    offset[0, 0] = 256
+    offset[1, 0] = 192
+    seq_d = torch.linalg.vector_norm(seq[:2, :] - offset, ord=2, dim=0)
+    # Augment and normalize positions for diffusion
     seq_x = random_flip(seq[:2, :]) / playfield_size.unsqueeze(1)
     seq_o = seq[2, :]
     seq_c = torch.concatenate(
@@ -114,7 +117,7 @@ def split_and_process_sequence(seq: torch.Tensor):
             seq[3:, :],
         ], 0)
 
-    return seq_x, seq_o, seq_c
+    return (seq_x, seq_o, seq_c), seq.shape[1]
 
 
 def window_and_relative_time(seq, s, e):
@@ -139,7 +142,7 @@ class BeatmapDatasetIterable:
         self.current_seq = None
         self.current_seq_len = -1
         self.seq_index = 0
-        self.seq_func = seq_func if seq_func is not None else lambda x: x
+        self.seq_func = seq_func if seq_func is not None else lambda x: beatmap_to_sequence(x)
         self.win_func = win_func if win_func is not None else lambda x, s, e: x[:, s:e]
 
     def __iter__(self):
@@ -155,9 +158,7 @@ class BeatmapDatasetIterable:
             beatmap = Beatmap.from_path(beatmap_path)
 
             self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
-            seq = beatmap_to_sequence(beatmap)
-            self.current_seq_len = seq.shape[1]
-            self.current_seq = self.seq_func(seq)
+            self.current_seq, self.current_seq_len = self.seq_func(beatmap)
             self.seq_index = random.randint(0, self.stride - 1)
             self.index += 1
 
