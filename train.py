@@ -21,7 +21,7 @@ import os
 from models import DiT_models
 from diffusion import create_diffusion
 
-from data_loading import get_processed_data_loader, context_size
+from data_loading import get_processed_data_loader, feature_size, split_and_process_sequence, window_and_relative_time
 
 
 #################################################################################
@@ -111,7 +111,7 @@ def main(args):
     # Create model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size,
+        context_size=feature_size - 3 + 128,
         class_dropout_prob=0.2,
     )
     # Note that parameter initialization is done within the DiT constructor
@@ -151,6 +151,8 @@ def main(args):
         pin_memory=True,
         drop_last=True,
         subset_ids=subset_ids,
+        seq_func=split_and_process_sequence,
+        win_func=window_and_relative_time,
     )
     logger.info(f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
 
@@ -178,7 +180,7 @@ def main(args):
     logger.info(f"Training for {args.epochs} epochs...")
     for epoch in range(args.epochs):
         logger.info(f"Beginning epoch {epoch}...")
-        for x, o, c, y in loader:
+        for (x, o, c), y in loader:
             x = x.to(device)
             o = o.to(device)
             c = c.to(device)

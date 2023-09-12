@@ -14,7 +14,7 @@ from slider import Beatmap
 from export.create_beatmap import create_beatmap, plot_beatmap
 from diffusion import create_diffusion
 from models import DiT_models
-from data_loading import context_size, beatmap_to_sequence, get_beatmap_idx, split_and_process_sequence
+from data_loading import feature_size, beatmap_to_sequence, get_beatmap_idx, split_and_process_sequence
 
 
 def find_model(ckpt_path):
@@ -53,7 +53,7 @@ def main(args):
     # Load model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size
+        context_size=feature_size - 3 + 128,
     ).to(device)
     state_dict = find_model(args.ckpt)
     model.load_state_dict(state_dict)
