@@ -45,10 +45,9 @@ def main(args):
         seq_no_embed = seq_no_embed[:, start_index:start_index + args.seq_len]
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
-    seq_len = seq_no_embed.shape[1]
-    print(f"seq len {seq_len}")
-    seq_x, seq_o, seq_c = split_and_process_sequence(seq_no_embed)
+    (seq_x, seq_o, seq_c), seq_len = split_and_process_sequence(seq_no_embed)
     seq_o = seq_o - seq_o[0]  # Normalize to relative time
+    print(f"seq len {seq_len}")
 
     # Load model:
     model = DiT_models[args.model](
@@ -89,6 +88,10 @@ def main(args):
     y = torch.cat([y, y_null], 0)
     model_kwargs = dict(o=o, c=c, y=y, cfg_scale=args.cfg_scale, attn_mask=attn_mask)
 
+    def to_seq(samples):
+        samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+        return torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
+
     # Sample images:
     sampled_seq = None
     if args.plot_time is not None and args.make_animation:
@@ -99,8 +102,7 @@ def main(args):
         artists = []
 
         for samples in diffusion.p_sample_loop_progressive(model.forward_with_cfg, z.shape, z, clip_denoised=True, model_kwargs=model_kwargs, progress=True, device=device):
-            samples, _ = samples["sample"].chunk(2, dim=0)  # Remove null class samples
-            sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
+            sampled_seq = to_seq(samples['sample'])
             new_beatmap = create_beatmap(sampled_seq[0], beatmap, f"Diffusion {args.style_id}")
             artists.append(plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width))
 
@@ -108,8 +110,7 @@ def main(args):
         ani.save(filename=os.path.join(result_dir, "animation.gif"), writer="pillow")
     else:
         samples = diffusion.p_sample_loop(model.forward_with_cfg, z.shape, z, clip_denoised=True, model_kwargs=model_kwargs, progress=True, device=device)
-        samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-        sampled_seq = torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
+        sampled_seq = to_seq(samples)
 
     # Save beatmaps:
     for i in range(n):

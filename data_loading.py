@@ -15,7 +15,7 @@ from torch.utils.data import IterableDataset, DataLoader
 from positional_embedding import timestep_embedding, position_sequence_embedding, offset_sequence_embedding
 
 playfield_size = torch.tensor((512, 384))
-feature_size = 18
+feature_size = 19
 
 
 def create_datapoint(time: timedelta, pos: Position, datatype):
@@ -101,9 +101,7 @@ def random_flip(seq: torch.Tensor):
     return seq
 
 
-def split_and_process_sequence(beatmap: Beatmap):
-    seq = beatmap_to_sequence(beatmap)
-
+def split_and_process_sequence(seq: torch.Tensor):
     offset = torch.roll(seq[:2, :], 1, 1)
     offset[0, 0] = 256
     offset[1, 0] = 192
@@ -118,6 +116,11 @@ def split_and_process_sequence(beatmap: Beatmap):
         ], 0)
 
     return (seq_x, seq_o, seq_c), seq.shape[1]
+
+
+def load_and_process_beatmap(beatmap: Beatmap):
+    seq = beatmap_to_sequence(beatmap)
+    return split_and_process_sequence(seq)
 
 
 def window_and_relative_time(seq, s, e):
@@ -316,7 +319,7 @@ if __name__ == '__main__':
         pin_memory = False,
         drop_last = True,
         # subset_ids=subset_ids,
-        seq_func=split_and_process_sequence,
+        seq_func=load_and_process_beatmap,
         win_func=window_and_relative_time,
     )
 

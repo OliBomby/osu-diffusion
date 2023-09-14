@@ -21,7 +21,7 @@ import os
 from models import DiT_models
 from diffusion import create_diffusion
 
-from data_loading import get_processed_data_loader, feature_size, split_and_process_sequence, window_and_relative_time
+from data_loading import get_processed_data_loader, feature_size, window_and_relative_time, load_and_process_beatmap
 
 
 #################################################################################
@@ -151,7 +151,7 @@ def main(args):
         pin_memory=True,
         drop_last=True,
         subset_ids=subset_ids,
-        seq_func=split_and_process_sequence,
+        seq_func=load_and_process_beatmap,
         win_func=window_and_relative_time,
     )
     logger.info(f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
