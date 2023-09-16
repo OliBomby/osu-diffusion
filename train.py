@@ -118,7 +118,7 @@ def main(args):
     ema: torch.nn.Module = deepcopy(model).to(device)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
     model = DDP(model.to(device), device_ids=[rank])
-    diffusion = create_diffusion(timestep_respacing="", noise_schedule="squaredcos_cap_v2")  # default: 1000 steps, linear noise schedule
+    diffusion = create_diffusion(timestep_respacing="", noise_schedule=args.noise_schedule, use_l1=args.l1_loss)  # default: 1000 steps, linear noise schedule
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
@@ -238,7 +238,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # Default args here will train DiT-XL with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-path", type=str, required=True)
     parser.add_argument("--num-classes", type=int, default=52670)
@@ -258,5 +257,7 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument("--dist", type=str, default="nccl")
     parser.add_argument("--fine-tune-ids", type=str, default=None)
+    parser.add_argument("--noise-schedule", type=str, default="squaredcos_cap_v2")
+    parser.add_argument("--l1-loss", type=bool, default=True)
     args = parser.parse_args()
     main(args)

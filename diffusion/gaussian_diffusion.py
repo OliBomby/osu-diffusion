@@ -50,6 +50,8 @@ class LossType(enum.Enum):
     )  # use raw MSE loss (with RESCALED_KL when learning variances)
     KL = enum.auto()  # use the variational lower-bound
     RESCALED_KL = enum.auto()  # like KL, but rescale to estimate the full VLB
+    L1 = enum.auto()
+    RESCALED_L1 = enum.auto()
 
     def is_vb(self):
         return self == LossType.KL or self == LossType.RESCALED_KL
@@ -743,7 +745,8 @@ class GaussianDiffusion:
             )["output"]
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
-        elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
+        elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE\
+                or self.loss_type == LossType.L1 or self.loss_type == LossType.RESCALED_L1:
             model_output = model(x_t, t, **model_kwargs)
 
             if self.model_var_type in [
@@ -763,7 +766,7 @@ class GaussianDiffusion:
                     t=t,
                     clip_denoised=False,
                 )["output"]
-                if self.loss_type == LossType.RESCALED_MSE:
+                if self.loss_type == LossType.RESCALED_MSE or self.loss_type == LossType.RESCALED_L1:
                     # Divide by 1000 for equivalence with initial implementation.
                     # Without a factor of 1/1000, the VB term hurts the MSE term.
                     terms["vb"] *= self.num_timesteps / 1000.0
@@ -776,11 +779,18 @@ class GaussianDiffusion:
                 ModelMeanType.EPSILON: noise,
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape
-            terms["mse"] = mean_flat((target - model_output) ** 2)
-            if "vb" in terms:
-                terms["loss"] = terms["mse"] + terms["vb"]
+            if self.loss_type == LossType.L1 or self.loss_type == LossType.RESCALED_L1:
+                terms["l1"] = mean_flat(th.abs(target - model_output))
+                if "vb" in terms:
+                    terms["loss"] = terms["l1"] + terms["vb"]
+                else:
+                    terms["loss"] = terms["l1"]
             else:
-                terms["loss"] = terms["mse"]
+                terms["mse"] = mean_flat((target - model_output) ** 2)
+                if "vb" in terms:
+                    terms["loss"] = terms["mse"] + terms["vb"]
+                else:
+                    terms["loss"] = terms["mse"]
         else:
             raise NotImplementedError(self.loss_type)
 
