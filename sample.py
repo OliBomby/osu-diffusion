@@ -13,6 +13,7 @@ from matplotlib import animation
 
 from data_loading import beatmap_to_sequence
 from data_loading import context_size
+from data_loading import feature_size
 from data_loading import get_beatmap_idx
 from data_loading import split_and_process_sequence
 from diffusion import create_diffusion
@@ -24,7 +25,6 @@ from slider import Beatmap
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
-PLOT_ENABLED = False
 CLEAN_FILENAME_RX = re.compile(r"[/\\?%*:|\"<>\x7F\x00-\x1F]")
 
 
@@ -61,19 +61,22 @@ def main(args):
         seq_no_embed = seq_no_embed[:, start_index : start_index + args.seq_len]
         print(f"Sequence trimmed to length {seq_no_embed.shape[1]}")
 
-    seq_len = seq_no_embed.shape[1]
-    seq_x, seq_o, seq_c = split_and_process_sequence(seq_no_embed)
+    (seq_x, seq_o, seq_c), seq_len = split_and_process_sequence(seq_no_embed)
     seq_o = seq_o - seq_o[0]  # Normalize to relative time
+    print(f"seq len {seq_len}")
 
     # Load model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size,
+        context_size=feature_size - 3 + 128,
     ).to(device)
     state_dict = find_model(args.ckpt)
     model.load_state_dict(state_dict)
     model.eval()  # important!
-    diffusion = create_diffusion(str(args.num_sampling_steps))
+    diffusion = create_diffusion(
+        str(args.num_sampling_steps),
+        noise_schedule="squaredcos_cap_v2",
+    )
 
     # Create banded matrix attention mask for increased sequence length
     attn_mask = torch.full((seq_len, seq_len), True, dtype=torch.bool, device=device)
@@ -104,9 +107,13 @@ def main(args):
     y = torch.cat([y, y_null], 0)
     model_kwargs = dict(o=o, c=c, y=y, cfg_scale=args.cfg_scale, attn_mask=attn_mask)
 
+    def to_seq(samples):
+        samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+        return torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
+
     # Sample images:
     sampled_seq = None
-    if args.plot_time is not None and PLOT_ENABLED:
+    if args.plot_time is not None and args.make_animation:
         fig, ax = plt.subplots()
         ax.axis("equal")
         ax.set_xlim([0, 512])
@@ -117,16 +124,12 @@ def main(args):
             model.forward_with_cfg,
             z.shape,
             z,
-            clip_denoised=False,
+            clip_denoised=True,
             model_kwargs=model_kwargs,
             progress=True,
             device=device,
         ):
-            samples, _ = samples["sample"].chunk(2, dim=0)  # Remove null class samples
-            sampled_seq = torch.concatenate(
-                [samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)],
-                1,
-            )
+            sampled_seq = to_seq(samples["sample"])
             new_beatmap = create_beatmap(
                 sampled_seq[0],
                 beatmap,
@@ -143,16 +146,12 @@ def main(args):
             model.forward_with_cfg,
             z.shape,
             z,
-            clip_denoised=False,
+            clip_denoised=True,
             model_kwargs=model_kwargs,
             progress=True,
             device=device,
         )
-        samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
-        sampled_seq = torch.concatenate(
-            [samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)],
-            1,
-        )
+        sampled_seq = to_seq(samples)
 
     # Save beatmaps:
     for idx, seq in enumerate(sampled_seq):
@@ -163,7 +162,10 @@ def main(args):
                 f"Diffusion {args.style_id} {idx} {datetime.now()}",
             )
             new_beatmap.write_path(
-                os.path.join(result_dir, f"{beatmap.beatmap_id} result {idx}.osu"),
+                os.path.join(
+                    result_dir,
+                    f"{beatmap.beatmap_id} result {args.style_id} {i}.osu",
+                ),
             )
 
             if args.plot_time is not None:
@@ -188,14 +190,18 @@ if __name__ == "__main__":
         default="DiT-B",
     )
     parser.add_argument("--num-classes", type=int, default=52670)
-    parser.add_argument("--cfg-scale", type=float, default=1.0)
+    parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--style-id", type=int, default=None)
     parser.add_argument("--plot-time", type=float, default=None)
-    parser.add_argument("--plot-width", type=float, default=1000)
+    parser.add_argument("--plot-width", type=float, default=2000)
     parser.add_argument("--num-variants", type=int, default=1)
+    parser.add_argument("--make-animation", type=bool, default=False)
     args = parser.parse_args()
+    # for style_id in [2592760, 1451282, 1995061, 3697057, 2799753, 1772923, 1907310]:
+    #     args.style_id = style_id
+    #     main(args)
     main(args)
