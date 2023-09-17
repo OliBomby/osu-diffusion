@@ -3,6 +3,7 @@ import math
 import os.path
 import pickle
 import random
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 
@@ -60,7 +61,7 @@ def append_control_points(
         datapoints.append(create_datapoint(time, pos, datatype))
 
 
-def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Position]:
+def get_data(hitobj: HitObject) -> torch.Tensor:
     if isinstance(hitobj, Slider) and len(hitobj.curve.points) < 100:
         datapoints = [
             create_datapoint(
@@ -104,7 +105,7 @@ def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Posit
             ),
         )
 
-        return torch.stack(datapoints, 0), slider_end_pos
+        return torch.stack(datapoints, 0)
 
     if isinstance(hitobj, Spinner):
         return torch.stack(
@@ -115,13 +116,11 @@ def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Posit
             0,
         )
 
-    return (
-        create_datapoint(
-            hitobj.time,
-            hitobj.position,
-            1 if hitobj.new_combo else 0,
-        ).unsqueeze(0),
-    )
+    return create_datapoint(
+        hitobj.time,
+        hitobj.position,
+        1 if hitobj.new_combo else 0,
+    ).unsqueeze(0)
 
 
 def beatmap_to_sequence(beatmap: Beatmap) -> torch.Tensor:
@@ -155,7 +154,7 @@ def split_and_process_sequence(
     seq_o = seq[2, :]
     seq_c = torch.concatenate(
         [
-            timestep_embedding(seq_d[3, :], 128).T,
+            timestep_embedding(seq_d, 128).T,
             seq[3:, :],
         ],
         0,
@@ -188,10 +187,11 @@ class BeatmapDatasetIterable:
         "stride",
         "index",
         "current_idx",
-        "current_seq_x",
-        "current_seq_o",
-        "current_seq_c",
+        "current_seq",
+        "current_seq_len",
         "seq_index",
+        "seq_func",
+        "win_func",
     )
 
     def __init__(
@@ -200,8 +200,8 @@ class BeatmapDatasetIterable:
         beatmap_idx: dict[int, int],
         seq_len: int,
         stride: int,
-        seq_func: callable | None = None,
-        win_func: callable | None = None,
+        seq_func: Callable | None = None,
+        win_func: Callable | None = None,
     ):
         self.beatmap_files = beatmap_files
         self.beatmap_idx = beatmap_idx
@@ -257,8 +257,8 @@ class InterleavingBeatmapDatasetIterable:
         seq_len: int,
         stride: int,
         cycle_length: int,
-        seq_func: callable | None = None,
-        win_func: callable | None = None,
+        seq_func: Callable | None = None,
+        win_func: Callable | None = None,
     ):
         per_worker = int(math.ceil(len(beatmap_files) / float(cycle_length)))
         self.workers = [
@@ -305,8 +305,8 @@ class BeatmapDataset(IterableDataset):
         cycle_length: int = 1,
         shuffle: bool = False,
         subset_ids: list[int] | None = None,
-        seq_func: callable | None = None,
-        win_func: callable | None = None,
+        seq_func: Callable | None = None,
+        win_func: Callable | None = None,
     ):
         super(BeatmapDataset).__init__()
         self.dataset_path = dataset_path
@@ -421,8 +421,8 @@ def get_processed_data_loader(
     pin_memory: bool = False,
     drop_last: bool = False,
     subset_ids: list[int] | None = None,
-    seq_func: callable | None = None,
-    win_func: callable | None = None,
+    seq_func: Callable | None = None,
+    win_func: Callable | None = None,
 ) -> DataLoader:
     dataset = BeatmapDataset(
         dataset_path=dataset_path,
@@ -449,9 +449,6 @@ def get_processed_data_loader(
     return dataloader
 
 
-if __name__ == "__main__":
-    batch_size = 256
-    num_workers = 16
 if __name__ == "__main__":
     # batch_size = 256
     # num_workers = 4
