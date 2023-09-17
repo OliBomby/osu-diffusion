@@ -130,14 +130,14 @@ def plot_region_around(beatmap_id, margin=5.0, **kwargs):
 
 def plot_mappers(mappers):
     regex = (
-        r"(?!\s?(de\s)?(it|that|"
+        r"(?!\s?(?:de\s)?(?:it|that|"
         + "|".join(mappers)
-        + "))(((^|[^\\S\r\n])(\\S)*([sz]'|'s))|((^|[^\\S\r\n])de\\s(\\S)*))"
+        + "))(?:(?:(?:^|[^\\S\r\n])(?:\\S)*(?:[sz]'|'s))|(?:(?:^|[^\\S\r\n])de\\s(?:\\S)*))"
     )
     fig, ax = plot_bg(figsize=(16, 10))
     for i, mapper in enumerate(mappers):
         m = df[
-            ((df["Creator"] == mapper) | df["Difficulty"].str.contains(mapper))
+            ((df["Source"] == mapper) | df["Difficulty"].str.contains(mapper))
             & ~df["Difficulty"].str.contains(regex)
         ]
         marker = str((i % 4) + 1)
@@ -153,10 +153,34 @@ def plot_mappers(mappers):
     plt.legend()
 
 
-df = pd.read_pickle("beatmap_df.pkl")
-ckpt = torch.load(
-    "D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new\\s512\\0080000.pt",
+def plot_tags(tags: list) -> None:
+    fig, ax = plot_bg(figsize=(16, 10))
+    for i, tag in enumerate(tags):
+        m = df[df["omdb"].apply(lambda x: isinstance(x, list) and tag in x)]
+        marker = str((i % 4) + 1)
+        add_annotations(
+            ax,
+            m.index,
+            label=tag,
+            alpha=0.5,
+            marker=marker,
+            s=150,
+            linewidths=5,
+        )
+    plt.legend()
+
+
+beatmap_df = pd.read_pickle("beatmap_df.pkl")
+tags_df = (
+    pd.read_csv(
+        "D:\\Osu! Dingen\\Beatmap ML Datasets\\omdb_tags.csv",
+        names=["BeatmapID", "omdb"],
+    )
+    .groupby(["BeatmapID"])
+    .agg(list)
 )
+df = pd.merge(beatmap_df, tags_df, on="BeatmapID", how="left")
+ckpt = torch.load("D:\\Osu! Dingen\\Beatmap ML Datasets\\results\\new2\\r\\0240000.pt")
 embedding_table = ckpt["ema"]["y_embedder.embedding_table.weight"]
 
 embs_file = "2d-embs.npy"
@@ -171,14 +195,8 @@ else:
 df["x"] = embs[:, 0]
 df["y"] = embs[:, 1]
 
-mappers = [
-    "olc",
-    "wafer",
-    "Fisky",
-    "Uberzolik",
-    "over_loadcode",
-    "Nevo",
-    "UndeadCapulet",
-]
-plot_mappers(mappers)
+# mappers = ['wafer', 'Nevo', 'Kroytz', 'Sotarks']
+# plot_mappers(mappers)
+tags = ["jump aim", "sharp aim", "wide aim", "linear aim", "aim control", "flow aim"]
+plot_tags(tags)
 plt.show()

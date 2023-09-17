@@ -31,7 +31,7 @@ def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Bea
         x = int(round(float(seq[0, j] * 512)))
         y = int(round(float(seq[1, j] * 384)))
         time = timedelta(seconds=float(seq[2, j] / 1000))
-        type_index = int(torch.argmax(seq[4:, j]))
+        type_index = int(torch.argmax(seq[3:, j]))
         pos = Position(x, y)
 
         match type_index:

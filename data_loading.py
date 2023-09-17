@@ -1,3 +1,4 @@
+import json
 import math
 import os.path
 import pickle
@@ -23,23 +24,17 @@ from slider.curve import MultiBezier
 from slider.curve import Perfect
 
 playfield_size = torch.tensor((512, 384))
-context_size = 16 + 128
+feature_size = 19
 
 
-def create_datapoint(
-    time: timedelta,
-    pos: Position,
-    datatype: int,
-    last_pos: Position,
-) -> torch.Tensor:
-    dist = math.sqrt((pos.x - last_pos.x) ** 2 + (pos.y - last_pos.y) ** 2)
-    pos_enc = torch.tensor(pos) / playfield_size
-    type_enc = torch.zeros(18)
-    type_enc[0] = time.total_seconds() * 1000
-    type_enc[1] = dist
-    type_enc[datatype + 2] = 1
+def create_datapoint(time: timedelta, pos: Position, datatype: int) -> torch.Tensor:
+    features = torch.zeros(19)
+    features[0] = pos.x
+    features[1] = pos.y
+    features[2] = time.total_seconds() * 1000
+    features[datatype + 3] = 1
 
-    return torch.concatenate([pos_enc, type_enc], 0)
+    return features
 
 
 def repeat_type(repeat: int) -> int:
@@ -56,17 +51,13 @@ def append_control_points(
     slider: Slider,
     datatype: int,
     duration: float,
-    last_pos: Position,
-) -> Position:
+):
     control_point_count = len(slider.curve.points)
 
     for i in range(1, control_point_count - 1):
         time = slider.time + i / (control_point_count - 1) * duration
         pos = slider.curve.points[i]
-        datapoints.append(create_datapoint(time, pos, datatype, last_pos))
-        last_pos = pos
-
-    return last_pos
+        datapoints.append(create_datapoint(time, pos, datatype))
 
 
 def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Position]:
@@ -76,20 +67,18 @@ def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Posit
                 hitobj.time,
                 hitobj.position,
                 5 if hitobj.new_combo else 4,
-                last_pos,
             ),
         ]
-        last_pos = hitobj.position
 
         assert hitobj.repeat >= 1
         duration: float = (hitobj.end_time - hitobj.time) / hitobj.repeat
 
         if isinstance(hitobj.curve, Linear):
-            last_pos = append_control_points(datapoints, hitobj, 9, duration, last_pos)
+            append_control_points(datapoints, hitobj, 9, duration)
         elif isinstance(hitobj.curve, Catmull):
-            last_pos = append_control_points(datapoints, hitobj, 8, duration, last_pos)
+            append_control_points(datapoints, hitobj, 8, duration)
         elif isinstance(hitobj.curve, Perfect):
-            last_pos = append_control_points(datapoints, hitobj, 7, duration, last_pos)
+            append_control_points(datapoints, hitobj, 7, duration)
         elif isinstance(hitobj.curve, MultiBezier):
             control_point_count = len(hitobj.curve.points)
 
@@ -98,21 +87,13 @@ def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Posit
                 pos = hitobj.curve.points[i]
 
                 if pos == hitobj.curve.points[i + 1]:
-                    datapoints.append(create_datapoint(time, pos, 9, last_pos))
-                    last_pos = pos
+                    datapoints.append(create_datapoint(time, pos, 9))
                 elif pos != hitobj.curve.points[i - 1]:
-                    datapoints.append(create_datapoint(time, pos, 6, last_pos))
-                    last_pos = pos
+                    datapoints.append(create_datapoint(time, pos, 6))
 
         datapoints.append(
-            create_datapoint(
-                hitobj.time + duration,
-                hitobj.curve.points[-1],
-                10,
-                last_pos,
-            ),
+            create_datapoint(hitobj.time + duration, hitobj.curve.points[-1], 10),
         )
-        last_pos = hitobj.curve.points[-1]
 
         slider_end_pos = hitobj.curve(1)
         datapoints.append(
@@ -120,27 +101,18 @@ def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Posit
                 hitobj.end_time,
                 slider_end_pos,
                 11 + repeat_type(hitobj.repeat),
-                last_pos,
             ),
         )
 
         return torch.stack(datapoints, 0), slider_end_pos
 
     if isinstance(hitobj, Spinner):
-        return (
-            torch.stack(
-                (
-                    create_datapoint(hitobj.time, hitobj.position, 2, last_pos),
-                    create_datapoint(
-                        hitobj.end_time,
-                        hitobj.position,
-                        3,
-                        hitobj.position,
-                    ),
-                ),
-                0,
+        return torch.stack(
+            (
+                create_datapoint(hitobj.time, hitobj.position, 2),
+                create_datapoint(hitobj.end_time, hitobj.position, 3),
             ),
-            hitobj.position,
+            0,
         )
 
     return (
@@ -148,20 +120,14 @@ def get_data(hitobj: HitObject, last_pos: Position) -> tuple[torch.Tensor, Posit
             hitobj.time,
             hitobj.position,
             1 if hitobj.new_combo else 0,
-            last_pos,
         ).unsqueeze(0),
-        hitobj.position,
     )
 
 
 def beatmap_to_sequence(beatmap: Beatmap) -> torch.Tensor:
     # Get the hit objects
     hit_objects = beatmap.hit_objects(stacking=False)
-    data_chunks = []
-    last_pos = Position(256, 192)
-    for ho in hit_objects:
-        data_chunk, last_pos = get_data(ho, last_pos)
-        data_chunks.append(data_chunk)
+    data_chunks = [get_data(ho) for ho in hit_objects]
 
     sequence = torch.concatenate(data_chunks, 0)
     sequence = torch.swapaxes(sequence, 0, 1)
@@ -169,28 +135,49 @@ def beatmap_to_sequence(beatmap: Beatmap) -> torch.Tensor:
     return sequence.float()
 
 
-def random_flip(seq_x: torch.Tensor) -> torch.Tensor:
+def random_flip(seq: torch.Tensor) -> torch.Tensor:
     if random.random() < 0.5:
-        seq_x[0] = 1 - seq_x[0]
+        seq[0] = 512 - seq[0]
     if random.random() < 0.5:
-        seq_x[1] = 1 - seq_x[1]
-    return seq_x
+        seq[1] = 384 - seq[1]
+    return seq
 
 
 def split_and_process_sequence(
     seq: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    seq_x = seq[:2, :]
+    offset = torch.roll(seq[:2, :], 1, 1)
+    offset[0, 0] = 256
+    offset[1, 0] = 192
+    seq_d = torch.linalg.vector_norm(seq[:2, :] - offset, ord=2, dim=0)
+    # Augment and normalize positions for diffusion
+    seq_x = random_flip(seq[:2, :]) / playfield_size.unsqueeze(1)
     seq_o = seq[2, :]
     seq_c = torch.concatenate(
         [
-            timestep_embedding(seq[3, :], 128).T,
-            seq[4:, :],
+            timestep_embedding(seq_d[3, :], 128).T,
+            seq[3:, :],
         ],
         0,
     )
 
-    return seq_x, seq_o, seq_c
+    return (seq_x, seq_o, seq_c), seq.shape[1]
+
+
+def load_and_process_beatmap(beatmap: Beatmap):
+    seq = beatmap_to_sequence(beatmap)
+    return split_and_process_sequence(seq)
+
+
+def window_and_relative_time(seq, s, e):
+    seq_x, seq_o, seq_c = seq
+    x = seq_x[:, s:e]
+    # Obscure the absolute time by normalizing to zero and adding a random offset between zero and the max period
+    # We do this to make sure the offset embedding utilizes the full range of values, which is also the case when sampling the model
+    o = seq_o[s:e] - seq_o[s] + random.random() * 100000
+    c = seq_c[:, s:e]
+
+    return x, o, c
 
 
 class BeatmapDatasetIterable:
@@ -213,6 +200,8 @@ class BeatmapDatasetIterable:
         beatmap_idx: dict[int, int],
         seq_len: int,
         stride: int,
+        seq_func: callable | None = None,
+        win_func: callable | None = None,
     ):
         self.beatmap_files = beatmap_files
         self.beatmap_idx = beatmap_idx
@@ -220,18 +209,21 @@ class BeatmapDatasetIterable:
         self.stride = stride
         self.index = 0
         self.current_idx = 0
-        self.current_seq_x: torch.Tensor | None = None
-        self.current_seq_o: torch.Tensor | None = None
-        self.current_seq_c: torch.Tensor | None = None
+        self.current_seq = None
+        self.current_seq_len = -1
         self.seq_index = 0
+        self.seq_func = (
+            seq_func if seq_func is not None else lambda x: beatmap_to_sequence(x)
+        )
+        self.win_func = win_func if win_func is not None else lambda x, s, e: x[:, s:e]
 
     def __iter__(self) -> "BeatmapDatasetIterable":
         return self
 
     def __next__(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
         while (
-            self.current_seq_x is None
-            or self.seq_index + self.seq_len > self.current_seq_x.shape[1]
+            self.current_seq is None
+            or self.seq_index + self.seq_len > self.current_seq_len
         ):
             if self.index >= len(self.beatmap_files):
                 raise StopIteration
@@ -241,32 +233,18 @@ class BeatmapDatasetIterable:
             beatmap = Beatmap.from_path(beatmap_path)
 
             self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
-
-            seq_no_embed = beatmap_to_sequence(beatmap)
-            (
-                self.current_seq_x,
-                self.current_seq_o,
-                self.current_seq_c,
-            ) = split_and_process_sequence(seq_no_embed)
-
-            # Augment data
-            self.current_seq_x = random_flip(self.current_seq_x)
+            self.current_seq, self.current_seq_len = self.seq_func(beatmap)
             self.seq_index = random.randint(0, self.stride - 1)
-
             self.index += 1
 
         # Return the preprocessed hit objects as a sequence of overlapping windows
-        x = self.current_seq_x[:, self.seq_index : self.seq_index + self.seq_len]
-        # Obscure the absolute time by normalizing to zero and adding a random offset between zero and the max period
-        # We do this to make sure the offset embedding utilizes the full range of values, which is also the case when sampling the model
-        o = (
-            self.current_seq_o[self.seq_index : self.seq_index + self.seq_len]
-            - self.current_seq_o[self.seq_index]
-            + random.random() * 100000
+        window = self.win_func(
+            self.current_seq,
+            self.seq_index,
+            self.seq_index + self.seq_len,
         )
-        c = self.current_seq_c[:, self.seq_index : self.seq_index + self.seq_len]
         self.seq_index += self.stride
-        return x, o, c, self.current_idx
+        return window, self.current_idx
 
 
 class InterleavingBeatmapDatasetIterable:
@@ -279,6 +257,8 @@ class InterleavingBeatmapDatasetIterable:
         seq_len: int,
         stride: int,
         cycle_length: int,
+        seq_func: callable | None = None,
+        win_func: callable | None = None,
     ):
         per_worker = int(math.ceil(len(beatmap_files) / float(cycle_length)))
         self.workers = [
@@ -289,6 +269,8 @@ class InterleavingBeatmapDatasetIterable:
                 beatmap_idx,
                 seq_len,
                 stride,
+                seq_func,
+                win_func,
             )
             for i in range(cycle_length)
         ]
@@ -322,6 +304,9 @@ class BeatmapDataset(IterableDataset):
         stride: int = 1,
         cycle_length: int = 1,
         shuffle: bool = False,
+        subset_ids: list[int] | None = None,
+        seq_func: callable | None = None,
+        win_func: callable | None = None,
     ):
         super(BeatmapDataset).__init__()
         self.dataset_path = dataset_path
@@ -332,23 +317,46 @@ class BeatmapDataset(IterableDataset):
         self.stride = stride
         self.cycle_length = cycle_length
         self.shuffle = shuffle
+        self.subset_ids = subset_ids
+        self.seq_func = seq_func
+        self.win_func = win_func
 
     def _get_beatmap_files(self) -> list[str]:
         # Get a list of all beatmap files in the dataset path in the track index range between start and end
         beatmap_files = []
         track_names = ["Track" + str(i).zfill(5) for i in range(self.start, self.end)]
         for track_name in track_names:
-            for beatmap_file in os.listdir(
-                os.path.join(self.dataset_path, track_name, "beatmaps"),
-            ):
-                beatmap_files.append(
-                    os.path.join(
-                        self.dataset_path,
-                        track_name,
-                        "beatmaps",
-                        beatmap_file,
-                    ),
+            if self.subset_ids is not None:
+                metadata_File = os.path.join(
+                    self.dataset_path,
+                    track_name,
+                    "metadata.json",
                 )
+                with open(metadata_File) as f:
+                    metadata = json.load(f)
+                for beatmap_name in metadata["Beatmaps"]:
+                    beatmap_metadata = metadata["Beatmaps"][beatmap_name]
+                    if beatmap_metadata["BeatmapId"] in self.subset_ids:
+                        beatmap_files.append(
+                            os.path.join(
+                                self.dataset_path,
+                                track_name,
+                                "beatmaps",
+                                beatmap_name + ".osu",
+                            ),
+                        )
+            else:
+                for beatmap_file in os.listdir(
+                    os.path.join(self.dataset_path, track_name, "beatmaps"),
+                ):
+                    beatmap_files.append(
+                        os.path.join(
+                            self.dataset_path,
+                            track_name,
+                            "beatmaps",
+                            beatmap_file,
+                        ),
+                    )
 
         return beatmap_files
 
@@ -365,6 +373,8 @@ class BeatmapDataset(IterableDataset):
                 self.seq_len,
                 self.stride,
                 self.cycle_length,
+                self.seq_func,
+                self.win_func,
             )
 
         return BeatmapDatasetIterable(
@@ -372,6 +382,8 @@ class BeatmapDataset(IterableDataset):
             self.beatmap_idx,
             self.seq_len,
             self.stride,
+            self.seq_func,
+            self.win_func,
         )
 
 
@@ -408,6 +420,9 @@ def get_processed_data_loader(
     shuffle: bool = False,
     pin_memory: bool = False,
     drop_last: bool = False,
+    subset_ids: list[int] | None = None,
+    seq_func: callable | None = None,
+    win_func: callable | None = None,
 ) -> DataLoader:
     dataset = BeatmapDataset(
         dataset_path=dataset_path,
@@ -418,6 +433,9 @@ def get_processed_data_loader(
         stride=stride,
         cycle_length=cycle_length,
         shuffle=shuffle,
+        subset_ids=subset_ids,
+        seq_func=seq_func,
+        win_func=win_func,
     )
     dataloader = DataLoader(
         dataset,
@@ -434,45 +452,55 @@ def get_processed_data_loader(
 if __name__ == "__main__":
     batch_size = 256
     num_workers = 16
+if __name__ == "__main__":
+    # batch_size = 256
+    # num_workers = 4
+    batch_size = 1
+    num_workers = 0
+    # import pandas as pd
+    # subset_ids = pd.read_csv("C:\\Users\\Olivier\\Documents\\GitHub\\osu-diffusion\\results\\tags\\clean_10000.csv")["BeatmapID"].tolist()
     dataloader = get_processed_data_loader(
         dataset_path="D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS13402",
         start=0,
         end=13402,
         seq_len=128,
         stride=16,
-        cycle_length=128,
+        cycle_length=1,
         batch_size=batch_size,
         num_workers=num_workers,
         shuffle=False,
         pin_memory=False,
         drop_last=True,
+        # subset_ids=subset_ids,
+        seq_func=load_and_process_beatmap,
+        win_func=window_and_relative_time,
     )
 
-    # import matplotlib.pyplot as plt
-    # for x, o, c, y in dataloader:
-    #     x = torch.swapaxes(x, 1, 2)   # (N, T, C)
-    #     c = torch.swapaxes(c, 1, 2)   # (N, T, E)
-    #     print(x.shape, o.shape, c.shape, y.shape)
-    #     batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
-    #     print(batch_pos_emb.shape)
-    #     batch_offset_emb = offset_sequence_embedding(o / 10, 128)
-    #     print(batch_offset_emb.shape)
-    #     print(y)
-    #
-    #     for j in range(batch_size):
-    #         fig, axs = plt.subplots(3, figsize=(5, 30))
-    #         axs[0].imshow(batch_pos_emb[j])
-    #         axs[1].imshow(batch_offset_emb[j])
-    #         axs[2].imshow(c[j])
-    #         print(y[j])
-    #         plt.show()
-    #     break
+    import matplotlib.pyplot as plt
 
-    import time
-    import tqdm
+    for (x, o, c), y in dataloader:
+        x = torch.swapaxes(x, 1, 2)  # (N, T, C)
+        c = torch.swapaxes(c, 1, 2)  # (N, T, E)
+        print(x.shape, o.shape, c.shape, y.shape)
+        batch_pos_emb = position_sequence_embedding(x * playfield_size, 128)
+        print(batch_pos_emb.shape)
+        batch_offset_emb = offset_sequence_embedding(o / 10, 128)
+        print(batch_offset_emb.shape)
+        print(y)
 
-    count = 0
-    start = time.time()
-    for f in tqdm.tqdm(dataloader, total=76200, smoothing=0.01):
-        count += 1
-        # print(f"\r{count}, {count / (time.time() - start)} per second, beatmap index {torch.max(f[1])}", end='')
+        for j in range(batch_size):
+            fig, axs = plt.subplots(3, figsize=(5, 20))
+            axs[0].imshow(batch_pos_emb[j])
+            axs[1].imshow(batch_offset_emb[j])
+            axs[2].imshow(c[j])
+            print(y[j])
+            plt.show()
+        break
+
+    # import time
+    # import tqdm
+    # count = 0
+    # start = time.time()
+    # for f in tqdm.tqdm(dataloader, total=76200, smoothing=0.01):
+    #     count += 1
+    #     # print(f"\r{count}, {count / (time.time() - start)} per second, beatmap index {torch.max(f[1])}", end='')

@@ -20,7 +20,12 @@ import os
 from models import DiT_models
 from diffusion import create_diffusion
 
-from data_loading import get_processed_data_loader, context_size
+from data_loading import (
+    get_processed_data_loader,
+    feature_size,
+    window_and_relative_time,
+    load_and_process_beatmap,
+)
 
 
 #################################################################################
@@ -125,7 +130,7 @@ def main(args):
     # Create model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size,
+        context_size=feature_size - 3 + 128,
         class_dropout_prob=0.2,
     )
     # Note that parameter initialization is done within the DiT constructor
@@ -136,6 +141,8 @@ def main(args):
     model = DDP(model.to(device), device_ids=[rank])
     diffusion = create_diffusion(
         timestep_respacing="",
+        noise_schedule=args.noise_schedule,
+        use_l1=args.l1_loss,
     )  # default: 1000 steps, linear noise schedule
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -144,6 +151,12 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
 
     # Setup data:
+    subset_ids = None
+    if args.fine_tune_ids is not None:
+        import pandas as pd
+
+        subset_ids = pd.read_csv(args.fine_tune_ids)["BeatmapID"].tolist()
+
     global_start = args.data_start
     global_end = args.data_end
     per_rank = int(np.ceil((global_end - global_start) / float(world_size)))
@@ -163,6 +176,9 @@ def main(args):
         shuffle=True,
         pin_memory=True,
         drop_last=True,
+        subset_ids=subset_ids,
+        seq_func=load_and_process_beatmap,
+        win_func=window_and_relative_time,
     )
     logger.info(
         f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})",
@@ -198,7 +214,7 @@ def main(args):
     logger.info(f"Training for {args.epochs} epochs...")
     for epoch in range(args.epochs):
         logger.info(f"Beginning epoch {epoch}...")
-        for x, o, c, y in loader:
+        for (x, o, c), y in loader:
             x = x.to(device)
             o = o.to(device)
             c = c.to(device)
@@ -262,7 +278,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # Default args here will train DiT-XL with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-path", type=str, required=True)
     parser.add_argument("--num-classes", type=int, default=52670)
@@ -281,10 +296,13 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=50_000)
-    parser.add_argument("--seq-len", type=int, default=64)
+    parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--stride", type=int, default=16)
     parser.add_argument("--use-amp", type=bool, default=True)
     parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument("--dist", type=str, default="nccl")
+    parser.add_argument("--fine-tune-ids", type=str, default=None)
+    parser.add_argument("--noise-schedule", type=str, default="squaredcos_cap_v2")
+    parser.add_argument("--l1-loss", type=bool, default=True)
     args = parser.parse_args()
     main(args)
