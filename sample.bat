@@ -1,1 +1,1 @@
-python .\sample.py --ckpt ..\0240000.pt %*
+pipenv run python .\sample.py --model DiT-L --ckpt ..\1880000.pt %*

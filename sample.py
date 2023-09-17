@@ -4,6 +4,7 @@ Sample new images from a pre-trained DiT.
 import argparse
 import logging
 import os
+import re
 from datetime import datetime
 
 import matplotlib.pyplot as plt
@@ -24,6 +25,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
 PLOT_ENABLED = False
+CLEAN_FILENAME_RX = re.compile(r"[/\\?%*:|\"<>\x7F\x00-\x1F]")
 
 
 def find_model(ckpt_path):
@@ -43,9 +45,11 @@ def main(args):
     # Load beatmap to sample coordinates for
     beatmap = Beatmap.from_path(args.beatmap)
 
+    filename = f"{beatmap.beatmap_id} {beatmap.artist} - {beatmap.title}"
+    filename = CLEAN_FILENAME_RX.sub("-", filename)
     result_dir = os.path.join(
         "results",
-        f"{beatmap.beatmap_id} {beatmap.artist} - {beatmap.title}",
+        filename,
     )
     os.makedirs(result_dir, exist_ok=True)
 

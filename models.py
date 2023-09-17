@@ -23,8 +23,6 @@ class TimestepEmbedder(nn.Module):
     Embeds scalar timesteps into vector representations.
     """
 
-    __slots__ = ["mlp", "frequency_embedding_size"]
-
     def __init__(self, hidden_size, frequency_embedding_size=256):
         super().__init__()
         self.mlp = nn.Sequential(
@@ -44,8 +42,6 @@ class LabelEmbedder(nn.Module):
     """
     Embeds class labels into vector representations. Also handles label dropout for classifier-free guidance.
     """
-
-    __slots__ = ["embedding_table", "num_classes", "dropout_prob"]
 
     def __init__(self, num_classes, hidden_size, dropout_prob):
         super().__init__()
@@ -85,8 +81,6 @@ class LabelEmbedder(nn.Module):
 
 class Mlp(nn.Module):
     """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
-
-    __slots__ = ["fc1", "act", "drop1", "norm", "fc2", "drop2"]
 
     def __init__(
         self,
@@ -129,8 +123,6 @@ class DiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
-
-    __slots__ = ["norm1", "attn", "norm2", "mlp", "adaLN_modulation"]
 
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
@@ -188,8 +180,6 @@ class FinalLayer(nn.Module):
     The final layer of DiT.
     """
 
-    __slots__ = ["norm_final", "linear", "adaLN_modulation"]
-
     def __init__(self, hidden_size, out_channels):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
@@ -210,8 +200,6 @@ class FirstLayer(nn.Module):
     """
     Embeds scalar positions into vector representation and concatenates context.
     """
-
-    __slots__ = ["mlp", "frequency_embedding_size", "playfield_size"]
 
     def __init__(
         self,
@@ -251,19 +239,6 @@ class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
     """
-
-    __slots__ = [
-        "learn_sigma",
-        "in_channels",
-        "context_size",
-        "out_channels",
-        "num_heads",
-        "xoc_embedder",
-        "t_embedder",
-        "y_embedder",
-        "blocks",
-        "final_layer",
-    ]
 
     def __init__(
         self,
