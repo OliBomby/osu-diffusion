@@ -1,44 +1,47 @@
-import os
 import json
+import os
+
 import pandas as pd
 
-beatmap_df = pd.DataFrame(columns=[
-    "BeatmapID",
-    "BeatmapSetID",
-    "TrackIndex",
-    "SetIndex",
-    "TrackName",
-    "BeatmapName",
-    "Artist",
-    "Title",
-    "Creator",
-    "Source",
-    "Tags",
-    "Ruleset",
-    "MD5Hash",
-    "Difficulty",
-    "OnlineOffset",
-    "DrainTime",
-    "TotalTime",
-    "RankedStatus",
-    "CirclesCount",
-    "SpinnersCount",
-    "SlidersCount",
-    "CircleSize",
-    "ApproachRate",
-    "OverallDifficulty",
-    "HPDrainRate",
-    "SliderVelocity",
-    "StackLeniency",
-    "StarRating"
-])
+beatmap_df = pd.DataFrame(
+    columns=[
+        "BeatmapID",
+        "BeatmapSetID",
+        "TrackIndex",
+        "SetIndex",
+        "TrackName",
+        "BeatmapName",
+        "Artist",
+        "Title",
+        "Creator",
+        "Source",
+        "Tags",
+        "Ruleset",
+        "MD5Hash",
+        "Difficulty",
+        "OnlineOffset",
+        "DrainTime",
+        "TotalTime",
+        "RankedStatus",
+        "CirclesCount",
+        "SpinnersCount",
+        "SlidersCount",
+        "CircleSize",
+        "ApproachRate",
+        "OverallDifficulty",
+        "HPDrainRate",
+        "SliderVelocity",
+        "StackLeniency",
+        "StarRating",
+    ],
+)
 dataset_path = "D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS13402"
 idx = 0
 
 for i in range(0, 13402):
     track_name = "Track" + str(i).zfill(5)
     metadata_File = os.path.join(dataset_path, track_name, "metadata.json")
-    with open(metadata_File, 'r') as f:
+    with open(metadata_File) as f:
         metadata = json.load(f)
     for j in range(len(metadata["Beatmaps"])):
         beatmap_name = str(idx).zfill(6) + "M" + str(j).zfill(3)
@@ -74,7 +77,7 @@ for i in range(0, 13402):
             beatmap_metadata["StandardStarRating"]["0"],
         ]
         idx += 1
-        print(f"\r{idx}", end='')
+        print(f"\r{idx}", end="")
 
 beatmap_df.to_pickle("beatmap_df.pkl")
 beatmap_df.describe()

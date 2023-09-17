@@ -1,11 +1,11 @@
 import enum
-from functools import reduce
 import operator as op
+from functools import reduce
 
 
 class BitEnum(enum.IntEnum):
-    """A type for enums representing bitmask field values.
-    """
+    """A type for enums representing bitmask field values."""
+
     @classmethod
     def pack(cls, **kwargs):
         """Pack a bitmask from explicit bit values.
@@ -28,7 +28,7 @@ class BitEnum(enum.IntEnum):
                 (members[k] * bool(v) for k, v in kwargs.items()),
             )
         except KeyError as e:
-            raise TypeError(f'{e} is not a member of {cls.__qualname__}')
+            raise TypeError(f"{e} is not a member of {cls.__qualname__}")
 
     @classmethod
     def unpack(cls, bitmask):

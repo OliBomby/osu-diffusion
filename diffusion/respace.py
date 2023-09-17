@@ -2,7 +2,6 @@
 #     GLIDE: https://github.com/openai/glide-text2im/blob/main/glide_text2im/gaussian_diffusion.py
 #     ADM:   https://github.com/openai/guided-diffusion/blob/main/guided_diffusion
 #     IDDPM: https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/gaussian_diffusion.py
-
 import numpy as np
 import torch as th
 
@@ -35,7 +34,7 @@ def space_timesteps(num_timesteps, section_counts):
                 if len(range(0, num_timesteps, i)) == desired_count:
                     return set(range(0, num_timesteps, i))
             raise ValueError(
-                f"cannot create exactly {num_timesteps} steps with an integer stride"
+                f"cannot create exactly {num_timesteps} steps with an integer stride",
             )
         section_counts = [int(x) for x in section_counts.split(",")]
     size_per = num_timesteps // len(section_counts)
@@ -46,7 +45,7 @@ def space_timesteps(num_timesteps, section_counts):
         size = size_per + (1 if i < extra else 0)
         if size < section_count:
             raise ValueError(
-                f"cannot divide section of {size} steps into {section_count}"
+                f"cannot divide section of {size} steps into {section_count}",
             )
         if section_count <= 1:
             frac_stride = 1
@@ -87,12 +86,18 @@ class SpacedDiffusion(GaussianDiffusion):
         super().__init__(**kwargs)
 
     def p_mean_variance(
-        self, model, *args, **kwargs
+        self,
+        model,
+        *args,
+        **kwargs,
     ):  # pylint: disable=signature-differs
         return super().p_mean_variance(self._wrap_model(model), *args, **kwargs)
 
     def training_losses(
-        self, model, *args, **kwargs
+        self,
+        model,
+        *args,
+        **kwargs,
     ):  # pylint: disable=signature-differs
         return super().training_losses(self._wrap_model(model), *args, **kwargs)
 
@@ -105,9 +110,7 @@ class SpacedDiffusion(GaussianDiffusion):
     def _wrap_model(self, model):
         if isinstance(model, _WrappedModel):
             return model
-        return _WrappedModel(
-            model, self.timestep_map, self.original_num_steps
-        )
+        return _WrappedModel(model, self.timestep_map, self.original_num_steps)
 
     def _scale_timesteps(self, t):
         # Scaling is done by the wrapped model.

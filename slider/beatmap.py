@@ -1,26 +1,33 @@
-from datetime import timedelta
-from enum import unique, IntEnum
-from functools import partial
 import inspect
-from itertools import chain, islice, cycle
 import operator as op
 import re
+from datetime import timedelta
+from enum import IntEnum
+from enum import unique
+from functools import partial
+from itertools import chain
+from itertools import cycle
+from itertools import islice
 from zipfile import ZipFile
 
 import numpy as np
 
 from .abc import abstractmethod
-from .game_mode import GameMode
-from .mod import ar_to_ms, ms_to_ar, circle_radius, od_to_ms_300, ms_300_to_od
-from .position import Position, Point, distance
-from .utils import (
-    accuracy as calculate_accuracy,
-    lazyval,
-    memoize,
-    no_default,
-    orange,
-)
 from .curve import Curve
+from .game_mode import GameMode
+from .mod import ar_to_ms
+from .mod import circle_radius
+from .mod import ms_300_to_od
+from .mod import ms_to_ar
+from .mod import od_to_ms_300
+from .position import distance
+from .position import Point
+from .position import Position
+from .utils import accuracy as calculate_accuracy
+from .utils import lazyval
+from .utils import memoize
+from .utils import no_default
+from .utils import orange
 
 
 def _get(cs, ix, default=no_default):
@@ -60,15 +67,18 @@ class TimingPoint:
     kiai_mode : bool
         Wheter or not kiai time effects are active.
     """
-    def __init__(self,
-                 offset,
-                 ms_per_beat,
-                 meter,
-                 sample_type,
-                 sample_set,
-                 volume,
-                 parent,
-                 kiai_mode):
+
+    def __init__(
+        self,
+        offset,
+        ms_per_beat,
+        meter,
+        sample_type,
+        sample_set,
+        volume,
+        parent,
+        kiai_mode,
+    ):
         self.offset = offset
         self.ms_per_beat = ms_per_beat
         self.meter = meter
@@ -90,7 +100,7 @@ class TimingPoint:
             self.sample_type,
             self.sample_set,
             self.volume,
-            getattr(self.parent, 'half_time', None),
+            getattr(self.parent, "half_time", None),
             self.kiai_mode,
         )
 
@@ -105,7 +115,7 @@ class TimingPoint:
             self.sample_type,
             self.sample_set,
             self.volume,
-            getattr(self.parent, 'double_time', None),
+            getattr(self.parent, "double_time", None),
             self.kiai_mode,
         )
 
@@ -122,12 +132,12 @@ class TimingPoint:
 
     def __repr__(self):
         if self.parent is None:
-            inherited = 'inherited '
+            inherited = "inherited "
         else:
-            inherited = ''
+            inherited = ""
         return (
-            f'<{type(self).__qualname__}:'
-            f' {inherited}{self.offset.total_seconds() * 1000:g}ms>'
+            f"<{type(self).__qualname__}:"
+            f" {inherited}{self.offset.total_seconds() * 1000:g}ms>"
         )
 
     @classmethod
@@ -152,16 +162,16 @@ class TimingPoint:
             Raised when ``data`` does not describe a ``TimingPoint`` object.
         """
         try:
-            offset, ms_per_beat, *rest = data.split(',')
+            offset, ms_per_beat, *rest = data.split(",")
         except ValueError:
             raise ValueError(
-                f'failed to parse {cls.__qualname__} from {data!r}',
+                f"failed to parse {cls.__qualname__} from {data!r}",
             )
 
         try:
             offset_float = float(offset)
         except ValueError:
-            raise ValueError(f'offset should be a float, got {offset!r}')
+            raise ValueError(f"offset should be a float, got {offset!r}")
 
         offset = timedelta(milliseconds=offset_float)
 
@@ -169,42 +179,42 @@ class TimingPoint:
             ms_per_beat = float(ms_per_beat)
         except ValueError:
             raise ValueError(
-                f'ms_per_beat should be a float, got {ms_per_beat!r}',
+                f"ms_per_beat should be a float, got {ms_per_beat!r}",
             )
 
         try:
-            meter = int(_get(rest, 0, '4'))
+            meter = int(_get(rest, 0, "4"))
         except ValueError:
-            raise ValueError(f'meter should be an int, got {meter!r}')
+            raise ValueError(f"meter should be an int, got {meter!r}")
 
         try:
-            sample_type = int(_get(rest, 1, '0'))
+            sample_type = int(_get(rest, 1, "0"))
         except ValueError:
             raise ValueError(
-                f'sample_type should be an int, got {sample_type!r}',
+                f"sample_type should be an int, got {sample_type!r}",
             )
 
         try:
-            sample_set = int(_get(rest, 2, '0'))
+            sample_set = int(_get(rest, 2, "0"))
         except ValueError:
             raise ValueError(
-                f'sample_set should be an int, got {sample_set!r}',
+                f"sample_set should be an int, got {sample_set!r}",
             )
 
         try:
-            volume = int(_get(rest, 3, '1'))
+            volume = int(_get(rest, 3, "1"))
         except ValueError:
-            raise ValueError(f'volume should be an int, got {volume!r}')
+            raise ValueError(f"volume should be an int, got {volume!r}")
 
         try:
-            inherited = not bool(int(_get(rest, 4, '1')))
+            inherited = not bool(int(_get(rest, 4, "1")))
         except ValueError:
-            raise ValueError(f'inherited should be a bool, got {inherited!r}')
+            raise ValueError(f"inherited should be a bool, got {inherited!r}")
 
         try:
-            kiai_mode = bool(int(_get(rest, 5, '0')))
+            kiai_mode = bool(int(_get(rest, 5, "0")))
         except ValueError:
-            raise ValueError(f'kiai_mode should be a bool, got {kiai_mode!r}')
+            raise ValueError(f"kiai_mode should be a bool, got {kiai_mode!r}")
 
         return cls(
             offset=offset,
@@ -232,14 +242,18 @@ class TimingPoint:
             Raised when essential member values are missing
             or are of incorrect type.
         """
-        return ','.join([_pack_timedelta('time', self.offset),
-                         _pack_float('beatLength', self.ms_per_beat),
-                         _pack_int('meter', self.meter),
-                         _pack_int('sampleSet', self.sample_type),
-                         _pack_int('sampleIndex', self.sample_set),
-                         _pack_int('volume', int(self.volume)),
-                         '1' if self.parent is None else '0',
-                         _pack_bool('effects', self.kiai_mode)])
+        return ",".join(
+            [
+                _pack_timedelta("time", self.offset),
+                _pack_float("beatLength", self.ms_per_beat),
+                _pack_int("meter", self.meter),
+                _pack_int("sampleSet", self.sample_type),
+                _pack_int("sampleIndex", self.sample_set),
+                _pack_int("volume", int(self.volume)),
+                "1" if self.parent is None else "0",
+                _pack_bool("effects", self.kiai_mode),
+            ],
+        )
 
 
 class HitObject:
@@ -256,9 +270,18 @@ class HitObject:
     addition : str, optional
         Unknown currently.
     """
-    time_related_attributes = frozenset({'time'})
 
-    def __init__(self, position, time, new_combo, combo_skip, hitsound, addition='0:0:0:0:'):
+    time_related_attributes = frozenset({"time"})
+
+    def __init__(
+        self,
+        position,
+        time,
+        new_combo,
+        combo_skip,
+        hitsound,
+        addition="0:0:0:0:",
+    ):
         self.position = position
         self.time = time
         self.new_combo = bool(new_combo)
@@ -271,8 +294,8 @@ class HitObject:
 
     def __repr__(self):
         return (
-            f'<{type(self).__qualname__}: {self.position},'
-            f' {self.time.total_seconds() * 1000:g}ms>'
+            f"<{type(self).__qualname__}: {self.position},"
+            f" {self.time.total_seconds() * 1000:g}ms>"
         )
 
     def _time_modify(self, coefficient):
@@ -337,7 +360,7 @@ class HitObject:
         kwargs = {}
         for name in inspect.signature(type(self)).parameters:
             value = getattr(self, name)
-            if name == 'position':
+            if name == "position":
                 value = Position(value.x, 384 - value.y)
             kwargs[name] = value
 
@@ -372,9 +395,9 @@ class HitObject:
             Raised when ``data`` does not describe a ``HitObject`` object.
         """
         try:
-            x, y, time, type_, hitsound, *rest = data.split(',')
+            x, y, time, type_, hitsound, *rest = data.split(",")
         except ValueError:
-            raise ValueError(f'not enough elements in line, got {data!r}')
+            raise ValueError(f"not enough elements in line, got {data!r}")
 
         try:
             # in old beatmaps (and potentially newer ones which were manually
@@ -387,27 +410,27 @@ class HitObject:
             # technically lose precision from the .osu file by casting.
             x = int(float(x))
         except ValueError:
-            raise ValueError(f'x should be an int, got {x!r}')
+            raise ValueError(f"x should be an int, got {x!r}")
 
         try:
             y = int(float(y))
         except ValueError:
-            raise ValueError(f'y should be an int, got {y!r}')
+            raise ValueError(f"y should be an int, got {y!r}")
 
         try:
             time = timedelta(milliseconds=int(time))
         except ValueError:
-            raise ValueError(f'type should be an int, got {time!r}')
+            raise ValueError(f"type should be an int, got {time!r}")
 
         try:
             type_ = int(type_)
         except ValueError:
-            raise ValueError(f'type should be an int, got {type_!r}')
+            raise ValueError(f"type should be an int, got {type_!r}")
 
         try:
             hitsound = int(hitsound)
         except ValueError:
-            raise ValueError(f'hitsound should be an int, got {hitsound!r}')
+            raise ValueError(f"hitsound should be an int, got {hitsound!r}")
 
         if type_ & Circle.type_code:
             parse = Circle._parse
@@ -423,9 +446,16 @@ class HitObject:
         elif type_ & HoldNote.type_code:
             parse = HoldNote._parse
         else:
-            raise ValueError(f'unknown type code {type_!r}')
+            raise ValueError(f"unknown type code {type_!r}")
 
-        return parse(Position(x, y), time, (type_ & 4) >> 2, (type_ & 112) >> 4, hitsound, rest)
+        return parse(
+            Position(x, y),
+            time,
+            (type_ & 4) >> 2,
+            (type_ & 112) >> 4,
+            hitsound,
+            rest,
+        )
 
     @abstractmethod
     def pack(self):
@@ -443,7 +473,7 @@ class HitObject:
             Raised when essential member values are missing
             or are of incorrect type.
         """
-        raise NotImplementedError('pack')
+        raise NotImplementedError("pack")
 
 
 class Circle(HitObject):
@@ -456,12 +486,13 @@ class Circle(HitObject):
     time : timedelta
         When this circle appears in the map.
     """
+
     type_code = 1
 
     @classmethod
     def _parse(cls, position, time, new_combo, combo_skip, hitsound, rest):
         if len(rest) > 1:
-            raise ValueError('extra data: {rest!r}')
+            raise ValueError("extra data: {rest!r}")
 
         return cls(position, time, new_combo, combo_skip, hitsound, *rest)
 
@@ -481,12 +512,16 @@ class Circle(HitObject):
             or are of incorrect type.
         """
         # Circles do not have objectParams
-        return ','.join([_pack_float('x', self.position.x),
-                         _pack_float('y', self.position.y),
-                         _pack_timedelta('time', self.time),
-                         _pack_int('type', Circle.type_code | self._get_combo_bits()),
-                         _pack_int('hitSound', self.hitsound),
-                         _pack_str('hitSample', self.addition)])
+        return ",".join(
+            [
+                _pack_float("x", self.position.x),
+                _pack_float("y", self.position.y),
+                _pack_timedelta("time", self.time),
+                _pack_int("type", Circle.type_code | self._get_combo_bits()),
+                _pack_int("hitSound", self.hitsound),
+                _pack_str("hitSample", self.addition),
+            ],
+        )
 
 
 class Spinner(HitObject):
@@ -503,16 +538,19 @@ class Spinner(HitObject):
     addition : str
         Hitsound additions.
     """
-    type_code = 8
-    time_related_attributes = frozenset({'time', 'end_time'})
 
-    def __init__(self,
-                 position,
-                 time,
-                 new_combo,
-                 hitsound,
-                 end_time,
-                 addition='0:0:0:0:'):
+    type_code = 8
+    time_related_attributes = frozenset({"time", "end_time"})
+
+    def __init__(
+        self,
+        position,
+        time,
+        new_combo,
+        hitsound,
+        end_time,
+        addition="0:0:0:0:",
+    ):
         super().__init__(position, time, new_combo, 0, hitsound, addition)
         self.end_time = end_time
 
@@ -521,15 +559,15 @@ class Spinner(HitObject):
         try:
             end_time, *rest = rest
         except ValueError:
-            raise ValueError('missing end_time')
+            raise ValueError("missing end_time")
 
         try:
             end_time = timedelta(milliseconds=int(end_time))
         except ValueError:
-            raise ValueError(f'end_time should be an int, got {end_time!r}')
+            raise ValueError(f"end_time should be an int, got {end_time!r}")
 
         if len(rest) > 1:
-            raise ValueError(f'extra data: {rest!r}')
+            raise ValueError(f"extra data: {rest!r}")
 
         return cls(position, time, new_combo, hitsound, end_time, *rest)
 
@@ -548,13 +586,17 @@ class Spinner(HitObject):
             Raised when essential member values are missing
             or are of incorrect type.
         """
-        return ','.join([_pack_float('x', self.position.x),
-                         _pack_float('y', self.position.y),
-                         _pack_timedelta('time', self.time),
-                         _pack_int('type', Spinner.type_code | self._get_combo_bits()),
-                         _pack_int('hitSound', self.hitsound),
-                         _pack_timedelta('endTime', self.end_time),
-                         _pack_str('hitSample', self.addition)])
+        return ",".join(
+            [
+                _pack_float("x", self.position.x),
+                _pack_float("y", self.position.y),
+                _pack_timedelta("time", self.time),
+                _pack_int("type", Spinner.type_code | self._get_combo_bits()),
+                _pack_int("hitSound", self.hitsound),
+                _pack_timedelta("endTime", self.end_time),
+                _pack_str("hitSample", self.addition),
+            ],
+        )
 
 
 class Slider(HitObject):
@@ -590,27 +632,30 @@ class Slider(HitObject):
     addition : str
         Hitsound additions.
     """
+
     type_code = 2
-    time_related_attributes = frozenset({'time', 'end_time', 'ms_per_beat'})
+    time_related_attributes = frozenset({"time", "end_time", "ms_per_beat"})
     LEGACY_LAST_TICK_OFFSET = timedelta(milliseconds=36)
 
-    def __init__(self,
-                 position,
-                 time,
-                 new_combo,
-                 combo_skip,
-                 end_time,
-                 hitsound,
-                 curve,
-                 repeat,
-                 length,
-                 ticks,
-                 num_beats,
-                 tick_rate,
-                 ms_per_beat,
-                 edge_sounds,
-                 edge_additions,
-                 addition='0:0:0:0:'):
+    def __init__(
+        self,
+        position,
+        time,
+        new_combo,
+        combo_skip,
+        end_time,
+        hitsound,
+        curve,
+        repeat,
+        length,
+        ticks,
+        num_beats,
+        tick_rate,
+        ms_per_beat,
+        edge_sounds,
+        edge_additions,
+        addition="0:0:0:0:",
+    ):
         super().__init__(position, time, new_combo, combo_skip, hitsound, addition)
         self.end_time = end_time
         self.curve = curve
@@ -625,8 +670,7 @@ class Slider(HitObject):
 
     @lazyval
     def tick_points(self):
-        """The position and time of each slider tick.
-        """
+        """The position and time of each slider tick."""
         repeat = self.repeat
 
         time = self.time
@@ -651,7 +695,7 @@ class Slider(HitObject):
             Point(p.x, p.y, pre_repeat_tick.offset)
             for pre_repeat_tick, p in zip(
                 pre_repeat_ticks,
-                chain(pre_repeat_ticks[-2::-1], [self.position])
+                chain(pre_repeat_ticks[-2::-1], [self.position]),
             )
         ]
 
@@ -661,10 +705,7 @@ class Slider(HitObject):
         )
         return list(
             chain.from_iterable(
-                (
-                    Point(p.x, p.y, p.offset + n * repeat_duration)
-                    for p in tick_sequence
-                )
+                (Point(p.x, p.y, p.offset + n * repeat_duration) for p in tick_sequence)
                 for n, tick_sequence in enumerate(tick_sequences)
             ),
         )
@@ -680,15 +721,11 @@ class Slider(HitObject):
         # curve() takes in a percentage of how far along we want the point.
         # Take away the offset from the total length of the slider to get
         # the percentage of the slider we want the point at.
-        true_end_time = (
-            self.end_time - self.LEGACY_LAST_TICK_OFFSET
-        )
+        true_end_time = self.end_time - self.LEGACY_LAST_TICK_OFFSET
 
         # keep in mind to check for negative values here, e.g. at least
         # have the duration be 0
-        legacy_duration = max(
-            true_end_time - self.time, timedelta(milliseconds=0)
-        )
+        legacy_duration = max(true_end_time - self.time, timedelta(milliseconds=0))
         real_duration = self.end_time - self.time
 
         ratio = legacy_duration / real_duration
@@ -710,9 +747,9 @@ class Slider(HitObject):
         kwargs = {}
         for name in inspect.signature(type(self)).parameters:
             value = getattr(self, name)
-            if name == 'position':
+            if name == "position":
                 value = Position(value.x, 384 - value.y)
-            elif name == 'curve':
+            elif name == "curve":
                 value = value.hard_rock
             kwargs[name] = value
         obj = type(self)(**kwargs)
@@ -720,101 +757,103 @@ class Slider(HitObject):
         return obj
 
     @classmethod
-    def _parse(cls,
-               position,
-               time,
-               new_combo,
-               combo_skip,
-               hitsound,
-               rest,
-               timing_points,
-               slider_multiplier,
-               slider_tick_rate):
+    def _parse(
+        cls,
+        position,
+        time,
+        new_combo,
+        combo_skip,
+        hitsound,
+        rest,
+        timing_points,
+        slider_multiplier,
+        slider_tick_rate,
+    ):
         try:
             group_1, *rest = rest
         except ValueError:
-            raise ValueError(f'missing required slider data in {rest!r}')
+            raise ValueError(f"missing required slider data in {rest!r}")
 
         try:
-            slider_type, *raw_points = group_1.split('|')
+            slider_type, *raw_points = group_1.split("|")
         except ValueError:
             raise ValueError(
-                'expected slider type and points in the first'
-                f' element of rest, {rest!r}',
+                "expected slider type and points in the first"
+                f" element of rest, {rest!r}",
             )
 
         points = [position]
         for point in raw_points:
             try:
-                x, y = point.split(':')
+                x, y = point.split(":")
             except ValueError:
                 raise ValueError(
-                    f'expected points in the form x:y, got {point!r}',
+                    f"expected points in the form x:y, got {point!r}",
                 )
 
             try:
                 x = int(x)
             except ValueError:
-                raise ValueError('x should be an int, got {x!r}')
+                raise ValueError("x should be an int, got {x!r}")
 
             try:
                 y = int(y)
             except ValueError:
-                raise ValueError('y should be an int, got {y!r}')
+                raise ValueError("y should be an int, got {y!r}")
 
             points.append(Position(x, y))
 
         try:
             repeat, *rest = rest
         except ValueError:
-            raise ValueError(f'missing repeat in {rest!r}')
+            raise ValueError(f"missing repeat in {rest!r}")
 
         try:
             repeat = int(repeat)
         except ValueError:
-            raise ValueError(f'repeat should be an int, got {repeat!r}')
+            raise ValueError(f"repeat should be an int, got {repeat!r}")
 
         try:
             pixel_length, *rest = rest
         except ValueError:
-            raise ValueError(f'missing pixel_length in {rest!r}')
+            raise ValueError(f"missing pixel_length in {rest!r}")
 
         try:
             pixel_length = float(pixel_length)
         except ValueError:
             raise ValueError(
-                f'pixel_length should be a float, got {pixel_length!r}',
+                f"pixel_length should be a float, got {pixel_length!r}",
             )
 
         try:
             raw_edge_sounds_grouped, *rest = rest
         except ValueError:
-            raw_edge_sounds_grouped = ''
+            raw_edge_sounds_grouped = ""
 
-        raw_edge_sounds = raw_edge_sounds_grouped.split('|')
+        raw_edge_sounds = raw_edge_sounds_grouped.split("|")
         edge_sounds = []
-        if raw_edge_sounds != ['']:
+        if raw_edge_sounds != [""]:
             for edge_sound in raw_edge_sounds:
                 try:
                     edge_sound = int(edge_sound)
                 except ValueError:
                     raise ValueError(
-                        f'edge_sound should be an int, got {edge_sound!r}',
+                        f"edge_sound should be an int, got {edge_sound!r}",
                     )
                 edge_sounds.append(edge_sound)
 
         try:
             edge_additions_grouped, *rest = rest
         except ValueError:
-            edge_additions_grouped = ''
+            edge_additions_grouped = ""
 
         if edge_additions_grouped:
-            edge_additions = edge_additions_grouped.split('|')
+            edge_additions = edge_additions_grouped.split("|")
         else:
             edge_additions = []
 
         if len(rest) > 1:
-            raise ValueError(f'extra data: {rest!r}')
+            raise ValueError(f"extra data: {rest!r}")
 
         for tp in reversed(timing_points):
             if tp.offset <= time:
@@ -830,18 +869,13 @@ class Slider(HitObject):
             ms_per_beat = tp.ms_per_beat
 
         pixels_per_beat = slider_multiplier * 100 * velocity_multiplier
-        num_beats = (
-            (pixel_length * repeat) / pixels_per_beat
-        )
+        num_beats = (pixel_length * repeat) / pixels_per_beat
         duration = timedelta(milliseconds=int(num_beats * ms_per_beat))
 
         ticks = int(
-            (
-                (np.ceil((num_beats - 0.1) / repeat * slider_tick_rate) - 1)
-            ) *
-            repeat +
-            repeat +
-            1
+            (np.ceil((num_beats - 0.1) / repeat * slider_tick_rate) - 1) * repeat
+            + repeat
+            + 1,
         )
 
         return cls(
@@ -878,19 +912,27 @@ class Slider(HitObject):
             Raised when essential member values are missing
             or are of incorrect type.
         """
-        return ','.join([_pack_float('x', self.position.x),
-                         _pack_float('y', self.position.y),
-                         _pack_timedelta('time', self.time),
-                         _pack_int('type', Slider.type_code | self._get_combo_bits()),
-                         _pack_int('hitSound', self.hitsound),
-                         self.curve.pack(),
-                         _pack_int('slides', self.repeat),
-                         _pack_float('length', self.length),
-                         '|'.join(_pack_int('edgeSound', edge_sound)
-                                  for edge_sound in self.edge_sounds),
-                         '|'.join(_pack_str('edgeSet', edge_addition)
-                                  for edge_addition in self.edge_additions),
-                         _pack_str('hitSample', self.addition)])
+        return ",".join(
+            [
+                _pack_float("x", self.position.x),
+                _pack_float("y", self.position.y),
+                _pack_timedelta("time", self.time),
+                _pack_int("type", Slider.type_code | self._get_combo_bits()),
+                _pack_int("hitSound", self.hitsound),
+                self.curve.pack(),
+                _pack_int("slides", self.repeat),
+                _pack_float("length", self.length),
+                "|".join(
+                    _pack_int("edgeSound", edge_sound)
+                    for edge_sound in self.edge_sounds
+                ),
+                "|".join(
+                    _pack_str("edgeSet", edge_addition)
+                    for edge_addition in self.edge_additions
+                ),
+                _pack_str("hitSample", self.addition),
+            ],
+        )
 
 
 class HoldNote(HitObject):
@@ -907,15 +949,11 @@ class HoldNote(HitObject):
     -----
     A ``HoldNote`` can only appear in an osu!mania map.
     """
-    type_code = 128
-    time_related_attributes = frozenset({'time', 'end_time'})
 
-    def __init__(self,
-                 position,
-                 time,
-                 hitsound,
-                 end_time,
-                 addition='0:0:0:0:'):
+    type_code = 128
+    time_related_attributes = frozenset({"time", "end_time"})
+
+    def __init__(self, position, time, hitsound, end_time, addition="0:0:0:0:"):
         super().__init__(position, time, False, 0, hitsound, addition)
         self.end_time = end_time
 
@@ -924,14 +962,14 @@ class HoldNote(HitObject):
         try:
             end_time, *rest = rest
         except ValueError:
-            raise ValueError('missing end_time')
+            raise ValueError("missing end_time")
 
         try:
             end_time = timedelta(milliseconds=int(end_time))
         except ValueError:
-            raise ValueError(f'end_time should be an int, got {end_time!r}')
+            raise ValueError(f"end_time should be an int, got {end_time!r}")
         if len(rest) > 1:
-            raise ValueError('extra data: {rest!r}')
+            raise ValueError("extra data: {rest!r}")
 
         return cls(position, time, hitsound, end_time, *rest)
 
@@ -952,13 +990,21 @@ class HoldNote(HitObject):
         """
         # HoldNotes differ with Sliders in that their endTime is
         # joined with hitSample with ':' rather than with ','
-        return ','.join([_pack_int('x', self.position.x),
-                         _pack_int('y', self.position.y),
-                         _pack_timedelta('time', self.time),
-                         _pack_int('type', HoldNote.type_code),
-                         _pack_int('hitSound', self.hitsound),
-                         ':'.join([_pack_timedelta('endTime', self.end_time),
-                                   _pack_str('hitSample', self.addition)])])
+        return ",".join(
+            [
+                _pack_int("x", self.position.x),
+                _pack_int("y", self.position.y),
+                _pack_timedelta("time", self.time),
+                _pack_int("type", HoldNote.type_code),
+                _pack_int("hitSound", self.hitsound),
+                ":".join(
+                    [
+                        _pack_timedelta("endTime", self.end_time),
+                        _pack_str("hitSample", self.addition),
+                    ],
+                ),
+            ],
+        )
 
 
 def _get_as_str(groups, section, field, default=no_default):
@@ -985,14 +1031,14 @@ def _get_as_str(groups, section, field, default=no_default):
         mapping = groups[section]
     except KeyError:
         if default is no_default:
-            raise ValueError(f'missing section {section!r}')
+            raise ValueError(f"missing section {section!r}")
         return default
 
     try:
         return mapping[field]
     except KeyError:
         if default is no_default:
-            raise ValueError(f'missing field {field!r} in section {section!r}')
+            raise ValueError(f"missing field {field!r} in section {section!r}")
         return default
 
 
@@ -1025,8 +1071,7 @@ def _get_as_int(groups, section, field, default=no_default):
         return int(v)
     except ValueError:
         raise ValueError(
-            f'field {field!r} in section {section!r} should be an int,'
-            f' got {v!r}',
+            f"field {field!r} in section {section!r} should be an int," f" got {v!r}",
         )
 
 
@@ -1056,11 +1101,11 @@ def _get_as_int_list(groups, section, field, default=no_default):
         return v
 
     try:
-        return [int(e.strip()) for e in v.split(',')]
+        return [int(e.strip()) for e in v.split(",")]
     except ValueError:
         raise ValueError(
-            f'field {field!r} in section {section!r} should be an int list,'
-            f' got {v!r}',
+            f"field {field!r} in section {section!r} should be an int list,"
+            f" got {v!r}",
         )
 
 
@@ -1093,8 +1138,7 @@ def _get_as_float(groups, section, field, default=no_default):
         return float(v)
     except ValueError:
         raise ValueError(
-            f'field {field!r} in section {section!r} should be a float,'
-            f' got {v!r}',
+            f"field {field!r} in section {section!r} should be a float," f" got {v!r}",
         )
 
 
@@ -1129,13 +1173,11 @@ def _get_as_bool(groups, section, field, default=no_default):
         return bool(int(v))
     except ValueError:
         raise ValueError(
-            f'field {field!r} in section {section!r} should be a bool,'
-            f' got {v!r}',
+            f"field {field!r} in section {section!r} should be a bool," f" got {v!r}",
         )
 
 
-def _invalid_to_default(field: str, field_value, expected_type,
-                        default=no_default):
+def _invalid_to_default(field: str, field_value, expected_type, default=no_default):
     """
     Replaces the field_value with default value if it is invalid
     (missing or of incorrect type).
@@ -1167,8 +1209,8 @@ def _invalid_to_default(field: str, field_value, expected_type,
 
     if default is no_default:
         raise ValueError(
-            f'field {field!r} should be a {expected_type.__name__!r},'
-            f' got {field_value.__class__.__name__!r}',
+            f"field {field!r} should be a {expected_type.__name__!r},"
+            f" got {field_value.__class__.__name__!r}",
         )
 
     return default
@@ -1223,7 +1265,7 @@ def _pack_bool(field: str, bool_in: bool, default=no_default):
         Raised when ``bool_in`` is not a bool and default is not available.
     """
     bool_in = _invalid_to_default(field, bool_in, bool, default)
-    return '1' if bool_in else '0'
+    return "1" if bool_in else "0"
 
 
 def _pack_int(field: str, int_in: int, default=no_default):
@@ -1334,8 +1376,7 @@ def _pack_int_enum(field: str, enum_in: IntEnum, default=no_default):
     return str(int(enum_in))
 
 
-def _pack_str_list(field: str, list_str: list, sep: str = ' ',
-                   default=no_default):
+def _pack_str_list(field: str, list_str: list, sep: str = " ", default=no_default):
     """Pack a list of string to a string, with `sep` as separator
     between elements.
 
@@ -1365,8 +1406,7 @@ def _pack_str_list(field: str, list_str: list, sep: str = ' ',
     return sep.join(list_str)
 
 
-def _pack_timedelta_list(field: str, list_td: list, sep: str = ',',
-                         default=no_default):
+def _pack_timedelta_list(field: str, list_td: list, sep: str = ",", default=no_default):
     """Pack a list of timedelta to a string, with `sep` as separator
     between elements.
 
@@ -1393,7 +1433,7 @@ def _pack_timedelta_list(field: str, list_td: list, sep: str = ',',
         and default is not available.
     """
     list_td = _invalid_to_default(field, list_td, list, default)
-    return sep.join((str(td // timedelta(milliseconds=1)) for td in list_td))
+    return sep.join(str(td // timedelta(milliseconds=1)) for td in list_td)
 
 
 def _moving_average_by_time(times, data, delta, num):
@@ -1425,9 +1465,9 @@ def _moving_average_by_time(times, data, delta, num):
         times[0].item(),
         times[-1].item(),
         num,
-        dtype='timedelta64[ns]',
+        dtype="timedelta64[ns]",
     )
-    delta = np.timedelta64(int(delta * 1e9), 'ns')
+    delta = np.timedelta64(int(delta * 1e9), "ns")
 
     # compute the start and stop indices for each sampled window
     window_start_ixs = np.searchsorted(times[:, 0], out_times - delta)
@@ -1465,6 +1505,7 @@ class _DifficultyHitObject:
     previous : _DifficultyHitObject, optional
         The previous difficulty hit object.
     """
+
     decay_base = 0.3, 0.15
 
     almost_diameter = 90
@@ -1478,8 +1519,8 @@ class _DifficultyHitObject:
 
     @unique
     class Strain(IntEnum):
-        """Indices for the strain specific values.
-        """
+        """Indices for the strain specific values."""
+
         speed = 0
         aim = 1
 
@@ -1488,10 +1529,14 @@ class _DifficultyHitObject:
 
         scaling_factor = 52 / radius
         if radius < self.circle_size_buffer_threshold:
-            scaling_factor *= 1 + min(
-                self.circle_size_buffer_threshold - radius,
-                5,
-            ) / 50
+            scaling_factor *= (
+                1
+                + min(
+                    self.circle_size_buffer_threshold - radius,
+                    5,
+                )
+                / 50
+            )
 
         # this currently ignores slider length
         self.normalized_start = self.normalized_end = Position(
@@ -1513,20 +1558,13 @@ class _DifficultyHitObject:
 
         hit_object = self.hit_object
         if isinstance(hit_object, (Circle, Slider)):
-            result = self._spacing_weight(
-                self._distance(previous),
-                strain
-            ) * scaling
+            result = self._spacing_weight(self._distance(previous), strain) * scaling
 
         time_elapsed = (
-            self.hit_object.time -
-            previous.hit_object.time
+            self.hit_object.time - previous.hit_object.time
         ).total_seconds() * 1000
         result /= max(time_elapsed, 50)
-        decay = (
-            self.decay_base[strain] **
-            (time_elapsed / 1000)
-        )
+        decay = self.decay_base[strain] ** (time_elapsed / 1000)
         return previous.strains[strain] * decay + result
 
     def _distance(self, previous):
@@ -1552,29 +1590,20 @@ class _DifficultyHitObject:
             if distance > self.single_spacing:
                 return 2.5
             elif distance > self.stream_spacing:
-                return (
-                    1.6 +
-                    0.9 *
-                    (distance - self.stream_spacing) /
-                    (self.single_spacing - self.stream_spacing)
+                return 1.6 + 0.9 * (distance - self.stream_spacing) / (
+                    self.single_spacing - self.stream_spacing
                 )
             elif distance > self.almost_diameter:
-                return (
-                    1.2 +
-                    0.4 *
-                    (distance - self.almost_diameter) /
-                    (self.stream_spacing - self.almost_diameter)
+                return 1.2 + 0.4 * (distance - self.almost_diameter) / (
+                    self.stream_spacing - self.almost_diameter
                 )
             elif distance > self.almost_diameter / 2:
-                return (
-                    0.95 +
-                    0.25 *
-                    (distance - self.almost_diameter / 2) /
-                    (self.almost_diameter / 2.0)
+                return 0.95 + 0.25 * (distance - self.almost_diameter / 2) / (
+                    self.almost_diameter / 2.0
                 )
             return 0.95
 
-        return distance ** 0.99
+        return distance**0.99
 
 
 class Beatmap:
@@ -1659,43 +1688,46 @@ class Beatmap:
     -----
     This is currently missing the storyboard data.
     """
-    _version_regex = re.compile(r'^osu file format v(\d+)$')
 
-    def __init__(self,
-                 *,
-                 format_version,
-                 audio_filename,
-                 audio_lead_in,
-                 preview_time,
-                 countdown,
-                 sample_set,
-                 stack_leniency,
-                 mode,
-                 letterbox_in_breaks,
-                 widescreen_storyboard,
-                 bookmarks,
-                 distance_spacing,
-                 beat_divisor,
-                 grid_size,
-                 timeline_zoom,
-                 title,
-                 title_unicode,
-                 artist,
-                 artist_unicode,
-                 creator,
-                 version,
-                 source,
-                 tags,
-                 beatmap_id,
-                 beatmap_set_id,
-                 hp_drain_rate,
-                 circle_size,
-                 overall_difficulty,
-                 approach_rate,
-                 slider_multiplier,
-                 slider_tick_rate,
-                 timing_points,
-                 hit_objects):
+    _version_regex = re.compile(r"^osu file format v(\d+)$")
+
+    def __init__(
+        self,
+        *,
+        format_version,
+        audio_filename,
+        audio_lead_in,
+        preview_time,
+        countdown,
+        sample_set,
+        stack_leniency,
+        mode,
+        letterbox_in_breaks,
+        widescreen_storyboard,
+        bookmarks,
+        distance_spacing,
+        beat_divisor,
+        grid_size,
+        timeline_zoom,
+        title,
+        title_unicode,
+        artist,
+        artist_unicode,
+        creator,
+        version,
+        source,
+        tags,
+        beatmap_id,
+        beatmap_set_id,
+        hp_drain_rate,
+        circle_size,
+        overall_difficulty,
+        approach_rate,
+        slider_multiplier,
+        slider_tick_rate,
+        timing_points,
+        hit_objects,
+    ):
         self.format_version = format_version
         self.audio_filename = audio_filename
         self.audio_lead_in = audio_lead_in
@@ -1740,9 +1772,8 @@ class Beatmap:
 
     @property
     def display_name(self):
-        """The name of the map as it appears in game.
-        """
-        return f'{self.artist} - {self.title} [{self.version}]'
+        """The name of the map as it appears in game."""
+        return f"{self.artist} - {self.title} [{self.version}]"
 
     @memoize
     def bpm_min(self, *, half_time=False, double_time=False):
@@ -1834,12 +1865,7 @@ class Beatmap:
             cs /= 2
         return cs
 
-    def od(self,
-           *,
-           easy=False,
-           hard_rock=False,
-           half_time=False,
-           double_time=False):
+    def od(self, *, easy=False, hard_rock=False, half_time=False, double_time=False):
         """Compute the Overall Difficulty (OD) value for different mods.
 
         Parameters
@@ -1871,12 +1897,7 @@ class Beatmap:
 
         return od
 
-    def ar(self,
-           *,
-           easy=False,
-           hard_rock=False,
-           half_time=False,
-           double_time=False):
+    def ar(self, *, easy=False, hard_rock=False, half_time=False, double_time=False):
         """Compute the Approach Rate (AR) value for different mods.
 
         Parameters
@@ -1914,16 +1935,18 @@ class Beatmap:
 
         return ar
 
-    def hit_objects(self,
-                    *,
-                    circles=True,
-                    sliders=True,
-                    spinners=True,
-                    stacking=True,
-                    easy=False,
-                    hard_rock=False,
-                    double_time=False,
-                    half_time=False):
+    def hit_objects(
+        self,
+        *,
+        circles=True,
+        sliders=True,
+        spinners=True,
+        stacking=True,
+        easy=False,
+        hard_rock=False,
+        double_time=False,
+        half_time=False,
+    ):
         """Retrieve hit_objects.
 
         Parameters
@@ -1993,8 +2016,7 @@ class Beatmap:
         if sliders:
             keep_classes.append(Slider)
 
-        return tuple(ob for ob in hit_objects if
-                     isinstance(ob, tuple(keep_classes)))
+        return tuple(ob for ob in hit_objects if isinstance(ob, tuple(keep_classes)))
 
     def _resolve_stacking(self, hit_objects, ar, cs):
         """
@@ -2024,13 +2046,11 @@ class Beatmap:
         hit_objects = list(reversed(hit_objects))
 
         for i, ob_i in enumerate(hit_objects):
-
             if stack_height[ob_i] != 0 or isinstance(ob_i, Spinner):
                 continue
 
             if isinstance(ob_i, Circle):
-                for n, ob_n in enumerate(hit_objects[i+1:], start=i+1):
-
+                for n, ob_n in enumerate(hit_objects[i + 1 :], start=i + 1):
                     if isinstance(ob_n, Spinner):
                         continue
 
@@ -2042,9 +2062,10 @@ class Beatmap:
                     if (ob_i.time - end_time) > stack_threshold:
                         break
 
-                    if (isinstance(ob_n, Slider) and
-                            distance(ob_n.curve(1),
-                                     ob_i.position) < stack_dist):
+                    if (
+                        isinstance(ob_n, Slider)
+                        and distance(ob_n.curve(1), ob_i.position) < stack_dist
+                    ):
                         offset = stack_height[ob_i] - stack_height[ob_n] + 1
 
                         for hj in hit_objects[i:n]:
@@ -2073,8 +2094,7 @@ class Beatmap:
             elif isinstance(ob_i, Slider):
                 # We have hit the first slider in a possible stack.
                 # From this point on, we ALWAYS stack positive regardless.
-                for n, ob_n in enumerate(hit_objects[i+1:], start=i+1):
-
+                for n, ob_n in enumerate(hit_objects[i + 1 :], start=i + 1):
                     if isinstance(ob_n, Spinner):
                         continue
 
@@ -2130,7 +2150,6 @@ class Beatmap:
         stack_dist = 3
         stack_height = {ob: 0 for ob in hit_objects}
         for i, ob_i in enumerate(hit_objects):
-
             if stack_height[ob_i] != 0 and not isinstance(ob_i, Slider):
                 continue
 
@@ -2140,8 +2159,7 @@ class Beatmap:
                 start_time = ob_i.time
             slider_stack = 0
 
-            for j, ob_j in enumerate(hit_objects[i+1:], start=i+1):
-
+            for j, ob_j in enumerate(hit_objects[i + 1 :], start=i + 1):
                 if ob_j.time - stack_threshold > start_time:
                     break
 
@@ -2153,8 +2171,10 @@ class Beatmap:
                     else:
                         start_time = ob_j.time
 
-                elif (isinstance(ob_i, Slider) and
-                      distance(ob_j.position, ob_i.curve(1)) < stack_dist):
+                elif (
+                    isinstance(ob_i, Slider)
+                    and distance(ob_j.position, ob_i.curve(1)) < stack_dist
+                ):
                     # Case for sliders - bump notes down and right,
                     # rather than up and left.
                     slider_stack += 1
@@ -2203,8 +2223,10 @@ class Beatmap:
             If the beatmap has no hitobjects.
         """
         if len(self._hit_objects) == 0:
-            raise ValueError(f"The beatmap {self!r} must have at least one "
-                             "hit object to determine the closest hitobject.")
+            raise ValueError(
+                f"The beatmap {self!r} must have at least one "
+                "hit object to determine the closest hitobject.",
+            )
         if len(self._hit_objects) == 1:
             return self._hit_objects[0]
 
@@ -2233,8 +2255,7 @@ class Beatmap:
 
     @lazyval
     def max_combo(self):
-        """The highest combo that can be achieved on this beatmap.
-        """
+        """The highest combo that can be achieved on this beatmap."""
         max_combo = 0
 
         for hit_object in self._hit_objects:
@@ -2246,7 +2267,7 @@ class Beatmap:
         return max_combo
 
     def __repr__(self):
-        return f'<{type(self).__qualname__}: {self.display_name}>'
+        return f"<{type(self).__qualname__}: {self.display_name}>"
 
     @classmethod
     def from_osz_path(cls, path):
@@ -2289,7 +2310,7 @@ class Beatmap:
         ValueError
             Raised when the file cannot be parsed as a ``.osu`` file.
         """
-        with open(path, encoding='utf-8-sig') as file:
+        with open(path, encoding="utf-8-sig") as file:
             return cls.from_file(file)
 
     @classmethod
@@ -2314,9 +2335,9 @@ class Beatmap:
         return {
             beatmap.version: beatmap
             for beatmap in (
-                Beatmap.parse(file.read(name).decode('utf-8-sig'))
-                for name in
-                file.namelist() if name.endswith('.osu')
+                Beatmap.parse(file.read(name).decode("utf-8-sig"))
+                for name in file.namelist()
+                if name.endswith(".osu")
             )
         }
 
@@ -2341,12 +2362,14 @@ class Beatmap:
         """
         return cls.parse(file.read())
 
-    _mapping_groups = frozenset({
-        'General',
-        'Editor',
-        'Metadata',
-        'Difficulty',
-    })
+    _mapping_groups = frozenset(
+        {
+            "General",
+            "Editor",
+            "Metadata",
+            "Difficulty",
+        },
+    )
 
     def write_path(self, path):
         """Write a ``Beatmap`` object to a file on disk.
@@ -2362,7 +2385,7 @@ class Beatmap:
             Raised when the ``Beatmap`` object is invalid to be
             written to a ``.osu`` file.
         """
-        with open(path, mode='wt', encoding='utf-8-sig') as file:
+        with open(path, mode="w", encoding="utf-8-sig") as file:
             self.write_file(file)
 
     def write_file(self, file):
@@ -2413,12 +2436,12 @@ class Beatmap:
                 # build a dict from the ``Key: Value`` line format.
                 mapping = {}
                 for line in group_buffer:
-                    split = line.split(':', 1)
+                    split = line.split(":", 1)
                     try:
                         key, value = split
                     except ValueError:
                         key = split[0]
-                        value = ''
+                        value = ""
 
                     # throw away whitespace
                     mapping[key.strip()] = value.strip()
@@ -2432,11 +2455,11 @@ class Beatmap:
             # beginning or end of lines. This can cause logic relying on tokens
             # occurring at specific indices to fail, so we get rid of it.
             line = line.strip()
-            if not line or line.startswith('//'):
+            if not line or line.startswith("//"):
                 # filter out empty lines and comments
                 continue
 
-            if line[0] == '[' and line[-1] == ']':
+            if line[0] == "[" and line[-1] == "]":
                 # we found a section header, commit the current buffered group
                 # and start the new group
                 commit_group()
@@ -2472,24 +2495,24 @@ class Beatmap:
         line = next(lines)
         match = cls._version_regex.match(line)
         if match is None:
-            raise ValueError(f'missing osu file format specifier in: {line!r}')
+            raise ValueError(f"missing osu file format specifier in: {line!r}")
 
         format_version = int(match.group(1))
         groups = cls._find_groups(lines)
 
-        artist = _get_as_str(groups, 'Metadata', 'Artist')
-        title = _get_as_str(groups, 'Metadata', 'Title')
+        artist = _get_as_str(groups, "Metadata", "Artist")
+        title = _get_as_str(groups, "Metadata", "Title")
         od = _get_as_float(
             groups,
-            'Difficulty',
-            'OverallDifficulty',
+            "Difficulty",
+            "OverallDifficulty",
         )
 
         timing_points = []
         # the parent starts as None because the first timing point should
         # not be inherited
         parent = None
-        for raw_timing_point in groups['TimingPoints']:
+        for raw_timing_point in groups["TimingPoints"]:
             timing_point = TimingPoint.parse(raw_timing_point, parent)
             if timing_point.parent is None:
                 # we have a new parent node, pass that along to the new
@@ -2499,117 +2522,119 @@ class Beatmap:
 
         slider_multiplier = _get_as_float(
             groups,
-            'Difficulty',
-            'SliderMultiplier',
+            "Difficulty",
+            "SliderMultiplier",
             default=1.4,  # taken from wiki
         )
         slider_tick_rate = _get_as_float(
             groups,
-            'Difficulty',
-            'SliderTickRate',
+            "Difficulty",
+            "SliderTickRate",
             default=1.0,  # taken from wiki
         )
 
         return cls(
             format_version=format_version,
-            audio_filename=_get_as_str(groups, 'General', 'AudioFilename'),
+            audio_filename=_get_as_str(groups, "General", "AudioFilename"),
             audio_lead_in=timedelta(
-                milliseconds=_get_as_int(groups, 'General', 'AudioLeadIn', 0),
+                milliseconds=_get_as_int(groups, "General", "AudioLeadIn", 0),
             ),
             preview_time=timedelta(
-                milliseconds=_get_as_int(groups, 'General', 'PreviewTime', -1),
+                milliseconds=_get_as_int(groups, "General", "PreviewTime", -1),
             ),
-            countdown=_get_as_bool(groups, 'General', 'Countdown', False),
-            sample_set=_get_as_str(groups, 'General', 'SampleSet', 'Normal'),
+            countdown=_get_as_bool(groups, "General", "Countdown", False),
+            sample_set=_get_as_str(groups, "General", "SampleSet", "Normal"),
             stack_leniency=_get_as_float(
                 groups,
-                'General',
-                'StackLeniency',
+                "General",
+                "StackLeniency",
                 0,
             ),
-            mode=GameMode(_get_as_int(groups, 'General', 'Mode', 0)),
+            mode=GameMode(_get_as_int(groups, "General", "Mode", 0)),
             letterbox_in_breaks=_get_as_bool(
                 groups,
-                'General',
-                'LetterboxInBreaks',
+                "General",
+                "LetterboxInBreaks",
                 False,
             ),
             widescreen_storyboard=_get_as_bool(
                 groups,
-                'General',
-                'WidescreenStoryboard',
+                "General",
+                "WidescreenStoryboard",
                 False,
             ),
             bookmarks=[
-                timedelta(milliseconds=ms) for ms in _get_as_int_list(
+                timedelta(milliseconds=ms)
+                for ms in _get_as_int_list(
                     groups,
-                    'Editor',
-                    'Bookmarks',
+                    "Editor",
+                    "Bookmarks",
                     [],
                 )
             ],
             distance_spacing=_get_as_float(
                 groups,
-                'Editor',
-                'DistanceSpacing',
+                "Editor",
+                "DistanceSpacing",
                 1,
             ),
-            beat_divisor=_get_as_int(groups, 'Editor', 'BeatDivisor', 4),
-            grid_size=_get_as_int(groups, 'Editor', 'GridSize', 4),
-            timeline_zoom=_get_as_float(groups, 'Editor', 'TimelineZoom', 1.0),
+            beat_divisor=_get_as_int(groups, "Editor", "BeatDivisor", 4),
+            grid_size=_get_as_int(groups, "Editor", "GridSize", 4),
+            timeline_zoom=_get_as_float(groups, "Editor", "TimelineZoom", 1.0),
             title=title,
             title_unicode=_get_as_str(
                 groups,
-                'Metadata',
-                'TitleUnicode',
+                "Metadata",
+                "TitleUnicode",
                 title,
             ),
             artist=artist,
             artist_unicode=_get_as_str(
                 groups,
-                'Metadata',
-                'ArtistUnicode',
+                "Metadata",
+                "ArtistUnicode",
                 artist,
             ),
-            creator=_get_as_str(groups, 'Metadata', 'Creator'),
-            version=_get_as_str(groups, 'Metadata', 'Version'),
-            source=_get_as_str(groups, 'Metadata', 'Source', None),
+            creator=_get_as_str(groups, "Metadata", "Creator"),
+            version=_get_as_str(groups, "Metadata", "Version"),
+            source=_get_as_str(groups, "Metadata", "Source", None),
             # space delimited list
-            tags=_get_as_str(groups, 'Metadata', 'Tags', '').split(),
-            beatmap_id=_get_as_int(groups, 'Metadata', 'BeatmapID', None),
+            tags=_get_as_str(groups, "Metadata", "Tags", "").split(),
+            beatmap_id=_get_as_int(groups, "Metadata", "BeatmapID", None),
             beatmap_set_id=_get_as_int(
                 groups,
-                'Metadata',
-                'BeatmapSetID',
+                "Metadata",
+                "BeatmapSetID",
                 None,
             ),
-            hp_drain_rate=_get_as_float(groups, 'Difficulty', 'HPDrainRate'),
-            circle_size=_get_as_float(groups, 'Difficulty', 'CircleSize'),
+            hp_drain_rate=_get_as_float(groups, "Difficulty", "HPDrainRate"),
+            circle_size=_get_as_float(groups, "Difficulty", "CircleSize"),
             overall_difficulty=_get_as_float(
                 groups,
-                'Difficulty',
-                'OverallDifficulty',
+                "Difficulty",
+                "OverallDifficulty",
             ),
             approach_rate=_get_as_float(
                 groups,
-                'Difficulty',
-                'ApproachRate',
+                "Difficulty",
+                "ApproachRate",
                 # old maps didn't have an AR so the OD is used as a default
                 default=od,
             ),
             slider_multiplier=slider_multiplier,
             slider_tick_rate=slider_tick_rate,
             timing_points=timing_points,
-            hit_objects=list(map(
-                partial(
-                    HitObject.parse,
-                    timing_points=timing_points,
-                    slider_multiplier=slider_multiplier,
-                    slider_tick_rate=slider_tick_rate,
+            hit_objects=list(
+                map(
+                    partial(
+                        HitObject.parse,
+                        timing_points=timing_points,
+                        slider_multiplier=slider_multiplier,
+                        slider_tick_rate=slider_tick_rate,
+                    ),
+                    groups["HitObjects"],
                 ),
-                groups['HitObjects'],
-            )),
-
+            ),
         )
 
     def pack(self):
@@ -2628,124 +2653,159 @@ class Beatmap:
             Raised when essential member values are missing
             or are of incorrect type.
         """
-        def pack_field(field, field_value,
-                       pack_func, default, skip_empty=False):
+
+        def pack_field(field, field_value, pack_func, default, skip_empty=False):
             packed_field_str = pack_func(field, field_value, default=default)
             # if ``skip_empty`` is True, empty string will be
             # returned for empty fields
-            if skip_empty and packed_field_str == '':
-                return ''
-            return field + ':' + packed_field_str + '\n'
+            if skip_empty and packed_field_str == "":
+                return ""
+            return field + ":" + packed_field_str + "\n"
 
         # we'll pin ourselves to file format v14 for packing for now. We'll
         # need to update this if we ever update the format in which we output
         # packed beatmaps in.
-        packed_str = 'osu file format v14\n\n'
+        packed_str = "osu file format v14\n\n"
 
         # pack General section
-        packed_str += '[General]\n'
-        packed_str += pack_field('AudioFilename', self.audio_filename,
-                                 _pack_str, no_default)
-        packed_str += pack_field('AudioLeadIn', self.audio_lead_in,
-                                 _pack_timedelta, timedelta(milliseconds=0))
-        packed_str += pack_field('PreviewTime', self.preview_time,
-                                 _pack_timedelta, timedelta(milliseconds=-1))
-        packed_str += pack_field('Countdown', self.countdown,
-                                 _pack_bool, False)
-        packed_str += pack_field('SampleSet', self.sample_set,
-                                 _pack_str, 'None')
-        packed_str += pack_field('StackLeniency', self.stack_leniency,
-                                 _pack_float, 0)
-        packed_str += pack_field('Mode', self.mode,
-                                 _pack_int_enum, GameMode.standard)
-        packed_str += pack_field('LetterboxInBreaks', self.letterbox_in_breaks,
-                                 _pack_bool, False)
-        packed_str += pack_field('WidescreenStoryboard',
-                                 self.widescreen_storyboard,
-                                 _pack_bool, False)
-        packed_str += '\n'
+        packed_str += "[General]\n"
+        packed_str += pack_field(
+            "AudioFilename",
+            self.audio_filename,
+            _pack_str,
+            no_default,
+        )
+        packed_str += pack_field(
+            "AudioLeadIn",
+            self.audio_lead_in,
+            _pack_timedelta,
+            timedelta(milliseconds=0),
+        )
+        packed_str += pack_field(
+            "PreviewTime",
+            self.preview_time,
+            _pack_timedelta,
+            timedelta(milliseconds=-1),
+        )
+        packed_str += pack_field("Countdown", self.countdown, _pack_bool, False)
+        packed_str += pack_field("SampleSet", self.sample_set, _pack_str, "None")
+        packed_str += pack_field("StackLeniency", self.stack_leniency, _pack_float, 0)
+        packed_str += pack_field("Mode", self.mode, _pack_int_enum, GameMode.standard)
+        packed_str += pack_field(
+            "LetterboxInBreaks",
+            self.letterbox_in_breaks,
+            _pack_bool,
+            False,
+        )
+        packed_str += pack_field(
+            "WidescreenStoryboard",
+            self.widescreen_storyboard,
+            _pack_bool,
+            False,
+        )
+        packed_str += "\n"
 
         # pack Editor section
-        packed_str += '[Editor]\n'
+        packed_str += "[Editor]\n"
         # Bookmarks field actually does not even exist in .osu file
         # if there's no bookmark at all.
-        packed_str += pack_field('Bookmarks', self.bookmarks,
-                                 partial(_pack_timedelta_list, sep=','),
-                                 [], skip_empty=True)
-        packed_str += pack_field('DistanceSpacing', self.distance_spacing,
-                                 _pack_float, 1.0)
-        packed_str += pack_field('BeatDivisor', self.beat_divisor,
-                                 _pack_int, 4)
-        packed_str += pack_field('GridSize', self.grid_size,
-                                 _pack_int, 4)
-        packed_str += pack_field('TimelineZoom', self.timeline_zoom,
-                                 _pack_float, 1.0)
-        packed_str += '\n'
+        packed_str += pack_field(
+            "Bookmarks",
+            self.bookmarks,
+            partial(_pack_timedelta_list, sep=","),
+            [],
+            skip_empty=True,
+        )
+        packed_str += pack_field(
+            "DistanceSpacing",
+            self.distance_spacing,
+            _pack_float,
+            1.0,
+        )
+        packed_str += pack_field("BeatDivisor", self.beat_divisor, _pack_int, 4)
+        packed_str += pack_field("GridSize", self.grid_size, _pack_int, 4)
+        packed_str += pack_field("TimelineZoom", self.timeline_zoom, _pack_float, 1.0)
+        packed_str += "\n"
 
         # pack Metadata section
-        packed_str += '[Metadata]\n'
+        packed_str += "[Metadata]\n"
         # osu! beatmap editor forces mappers to enter Title, Artist,
         # Creator, Version fields when creating a new beatmap from
         # an audio file, so these fields are considered indispensable
         # for a valid Beatmap. When packing a Beatmap, ValueError will
         # be raised if these fields do not have sensible values.
-        packed_str += pack_field('Title', self.title,
-                                 _pack_str, no_default)
-        packed_str += pack_field('TitleUnicode', self.title_unicode,
-                                 _pack_str, self.title)
-        packed_str += pack_field('Artist', self.artist,
-                                 _pack_str, no_default)
-        packed_str += pack_field('ArtistUnicode', self.artist_unicode,
-                                 _pack_str, self.artist)
-        packed_str += pack_field('Creator', self.creator,
-                                 _pack_str, no_default)
-        packed_str += pack_field('Version', self.version,
-                                 _pack_str, no_default)
-        packed_str += pack_field('Source', self.source,
-                                 _pack_str, '')
-        packed_str += pack_field('Tags', self.tags,
-                                 partial(_pack_str_list, sep=' '),
-                                 '')
-        packed_str += pack_field('BeatmapID', self.beatmap_id,
-                                 _pack_int, 0)
-        packed_str += pack_field('BeatmapSetID', self.beatmap_set_id,
-                                 _pack_int, -1)
-        packed_str += '\n'
+        packed_str += pack_field("Title", self.title, _pack_str, no_default)
+        packed_str += pack_field(
+            "TitleUnicode",
+            self.title_unicode,
+            _pack_str,
+            self.title,
+        )
+        packed_str += pack_field("Artist", self.artist, _pack_str, no_default)
+        packed_str += pack_field(
+            "ArtistUnicode",
+            self.artist_unicode,
+            _pack_str,
+            self.artist,
+        )
+        packed_str += pack_field("Creator", self.creator, _pack_str, no_default)
+        packed_str += pack_field("Version", self.version, _pack_str, no_default)
+        packed_str += pack_field("Source", self.source, _pack_str, "")
+        packed_str += pack_field(
+            "Tags",
+            self.tags,
+            partial(_pack_str_list, sep=" "),
+            "",
+        )
+        packed_str += pack_field("BeatmapID", self.beatmap_id, _pack_int, 0)
+        packed_str += pack_field("BeatmapSetID", self.beatmap_set_id, _pack_int, -1)
+        packed_str += "\n"
 
         # pack Difficulty section
-        packed_str += '[Difficulty]\n'
-        packed_str += pack_field('HPDrainRate', self.hp_drain_rate,
-                                 _pack_float, 5.0)
-        packed_str += pack_field('CircleSize', self.circle_size,
-                                 _pack_float, 5.0)
-        packed_str += pack_field('OverallDifficulty', self.overall_difficulty,
-                                 _pack_float, 5.0)
-        packed_str += pack_field('ApproachRate', self.approach_rate,
-                                 _pack_float, 5.0)
-        packed_str += pack_field('SliderMultiplier', self.slider_multiplier,
-                                 _pack_float, 1.4)
-        packed_str += pack_field('SliderTickRate', self.slider_tick_rate,
-                                 _pack_float, 1.0)
-        packed_str += '\n'
+        packed_str += "[Difficulty]\n"
+        packed_str += pack_field("HPDrainRate", self.hp_drain_rate, _pack_float, 5.0)
+        packed_str += pack_field("CircleSize", self.circle_size, _pack_float, 5.0)
+        packed_str += pack_field(
+            "OverallDifficulty",
+            self.overall_difficulty,
+            _pack_float,
+            5.0,
+        )
+        packed_str += pack_field("ApproachRate", self.approach_rate, _pack_float, 5.0)
+        packed_str += pack_field(
+            "SliderMultiplier",
+            self.slider_multiplier,
+            _pack_float,
+            1.4,
+        )
+        packed_str += pack_field(
+            "SliderTickRate",
+            self.slider_tick_rate,
+            _pack_float,
+            1.0,
+        )
+        packed_str += "\n"
 
         # pack Events section
-        packed_str += '[Events]\n'
-        packed_str += '// Background and Video events\n' \
-                      '// Break Periods\n' \
-                      '// Storyboard Layer 0(Background)\n' \
-                      '// Storyboard Layer 1(Fail)\n' \
-                      '// Storyboard Layer 2(Pass)\n' \
-                      '// Storyboard Layer 3(Foreground)\n' \
-                      '// Storyboard Layer 4(Overlay)\n' \
-                      '// Storyboard Sound Samples\n'
-        packed_str += '\n'
+        packed_str += "[Events]\n"
+        packed_str += (
+            "// Background and Video events\n"
+            "// Break Periods\n"
+            "// Storyboard Layer 0(Background)\n"
+            "// Storyboard Layer 1(Fail)\n"
+            "// Storyboard Layer 2(Pass)\n"
+            "// Storyboard Layer 3(Foreground)\n"
+            "// Storyboard Layer 4(Overlay)\n"
+            "// Storyboard Sound Samples\n"
+        )
+        packed_str += "\n"
 
         # pack TimingPoints section
-        packed_str += '[TimingPoints]\n'
+        packed_str += "[TimingPoints]\n"
         for timing_point in self.timing_points:
             # each timing point occupies a line
-            packed_str += timing_point.pack() + '\n'
-        packed_str += '\n'
+            packed_str += timing_point.pack() + "\n"
+        packed_str += "\n"
 
         # pack Colours section
         # packed_str += '[Colours]\n'
@@ -2753,11 +2813,11 @@ class Beatmap:
         # packed_str += '\n'
 
         # pack HitObjects section
-        packed_str += '[HitObjects]\n'
+        packed_str += "[HitObjects]\n"
         for hit_object in self._hit_objects:
             # each hit object occupies a line
-            packed_str += hit_object.pack() + '\n'
-        packed_str += '\n'
+            packed_str += hit_object.pack() + "\n"
+        packed_str += "\n"
 
         return packed_str
 
@@ -2782,8 +2842,7 @@ class Beatmap:
 
     @staticmethod
     def _base_strain(strain):
-        """Scale up the base attribute
-        """
+        """Scale up the base attribute"""
         return ((5 * np.maximum(1, strain / 0.0675) - 4) ** 3) / 100000
 
     @staticmethod
@@ -2800,11 +2859,8 @@ class Beatmap:
                 ratio = a / b if a > b else b / a
 
                 closest_power_of_two = 2 ** round(np.log2(ratio))
-                offset = (
-                    abs(closest_power_of_two - ratio) /
-                    closest_power_of_two
-                )
-                yield offset ** 2
+                offset = abs(closest_power_of_two - ratio) / closest_power_of_two
+                yield offset**2
 
     _strain_step = timedelta(milliseconds=400)
     _decay_weight = 0.9
@@ -2826,10 +2882,8 @@ class Beatmap:
                     max_strain = 0
                 else:
                     decay = (
-                        _DifficultyHitObject.decay_base[strain] ** (
-                            interval_end -
-                            previous.hit_object.time
-                        ).total_seconds()
+                        _DifficultyHitObject.decay_base[strain]
+                        ** (interval_end - previous.hit_object.time).total_seconds()
                     )
                     max_strain = previous.strains[strain] * decay
 
@@ -2874,12 +2928,14 @@ class Beatmap:
 
                 yield sequence[n], sequence[m]
 
-    def hit_object_difficulty(self,
-                              *,
-                              easy=False,
-                              hard_rock=False,
-                              double_time=False,
-                              half_time=False):
+    def hit_object_difficulty(
+        self,
+        *,
+        easy=False,
+        hard_rock=False,
+        double_time=False,
+        half_time=False,
+    ):
         """Compute the difficulty of each hit object.
 
         Parameters
@@ -2905,16 +2961,17 @@ class Beatmap:
         radius = circle_radius(cs)
 
         if double_time:
-            modify = op.attrgetter('double_time')
+            modify = op.attrgetter("double_time")
         elif half_time:
-            modify = op.attrgetter('half_time')
+            modify = op.attrgetter("half_time")
         else:
+
             def modify(e):
                 return e
 
         times = np.empty(
             (len(self._hit_objects) - 1, 1),
-            dtype='timedelta64[ns]',
+            dtype="timedelta64[ns]",
         )
         strains = np.empty((len(self._hit_objects) - 1, 2), dtype=np.float64)
 
@@ -2932,14 +2989,16 @@ class Beatmap:
 
         return times, strains
 
-    def smoothed_difficulty(self,
-                            smoothing_window,
-                            num_points,
-                            *,
-                            easy=False,
-                            hard_rock=False,
-                            double_time=False,
-                            half_time=False):
+    def smoothed_difficulty(
+        self,
+        smoothing_window,
+        num_points,
+        *,
+        easy=False,
+        hard_rock=False,
+        double_time=False,
+        half_time=False,
+    ):
         """Calculate a smoothed difficulty at evenly spaced points in time
         between the beginning of the song and the last hit object of the map.
 
@@ -2974,7 +3033,7 @@ class Beatmap:
             easy=easy,
             hard_rock=hard_rock,
             double_time=double_time,
-            half_time=half_time
+            half_time=half_time,
         )
 
         return _moving_average_by_time(
@@ -2984,11 +3043,7 @@ class Beatmap:
             num_points,
         )
 
-    def _calculate_stars(self,
-                         easy,
-                         hard_rock,
-                         double_time,
-                         half_time):
+    def _calculate_stars(self, easy, hard_rock, double_time, half_time):
         """Compute the stars and star components for this map.
 
         Parameters
@@ -3012,10 +3067,11 @@ class Beatmap:
         append_interval = intervals.append
 
         if double_time:
-            modify = op.attrgetter('double_time')
+            modify = op.attrgetter("double_time")
         elif half_time:
-            modify = op.attrgetter('half_time')
+            modify = op.attrgetter("half_time")
         else:
+
             def modify(e):
                 return e
 
@@ -3072,17 +3128,12 @@ class Beatmap:
         )
 
         key = easy, hard_rock, double_time, half_time
-        self._aim_stars_cache[key] = aim = (
-            np.sqrt(aim) * self._star_scaling_factor
-        )
+        self._aim_stars_cache[key] = aim = np.sqrt(aim) * self._star_scaling_factor
         self._speed_stars_cache[key] = speed = (
             np.sqrt(speed) * self._star_scaling_factor
         )
         self._stars_cache[key] = (
-            aim +
-            speed +
-            abs(speed - aim) *
-            self._extreme_scaling_factor
+            aim + speed + abs(speed - aim) * self._extreme_scaling_factor
         )
         self._rhythm_awkwardness_cache[key] = rhythm_awkwardness
 
@@ -3102,14 +3153,16 @@ class Beatmap:
         getter : function
             The getter function.
         """
-        cache_name = f'_{name}_cache'
+        cache_name = f"_{name}_cache"
 
-        def get(self,
-                *,
-                easy=False,
-                hard_rock=False,
-                double_time=False,
-                half_time=False):
+        def get(
+            self,
+            *,
+            easy=False,
+            hard_rock=False,
+            double_time=False,
+            half_time=False,
+        ):
             key = (
                 bool(easy),
                 bool(hard_rock),
@@ -3128,7 +3181,7 @@ class Beatmap:
         return get
 
     speed_stars = _stars_cache_value(
-        'speed_stars',
+        "speed_stars",
         """The speed part of the stars.
 
         Parameters
@@ -3149,7 +3202,7 @@ class Beatmap:
         """,
     )
     aim_stars = _stars_cache_value(
-        'aim_stars',
+        "aim_stars",
         """The aim part of the stars.
 
         Parameters
@@ -3170,7 +3223,7 @@ class Beatmap:
         """,
     )
     stars = _stars_cache_value(
-        'stars',
+        "stars",
         """The stars as seen in osu!.
 
         Parameters
@@ -3191,7 +3244,7 @@ class Beatmap:
         """,
     )
     rhythm_awkwardness = _stars_cache_value(
-        'rhythm_awkwardness',
+        "rhythm_awkwardness",
         """The rhythm awkwardness component of the song.
 
         Parameters
@@ -3250,49 +3303,48 @@ class Beatmap:
 
         count_50 = np.full_like(accuracy, 0)
         count_100 = np.round(
-            -3.0 *
-            ((accuracy * 0.01 - 1.0) * len(self._hit_objects) + count_miss) *
-            0.5,
+            -3.0
+            * ((accuracy * 0.01 - 1.0) * len(self._hit_objects) + count_miss)
+            * 0.5,
         )
 
         mask = count_100 > len(self._hit_objects) - count_miss
         count_100[mask] = 0
         count_50[mask] = np.round(
-                -6.0 *
-                ((accuracy[mask] * 0.01 - 1.0) * len(self._hit_objects) +
-                 count_miss[mask]) *
-                0.2,
+            -6.0
+            * (
+                (accuracy[mask] * 0.01 - 1.0) * len(self._hit_objects)
+                + count_miss[mask]
             )
+            * 0.2,
+        )
         count_50[mask] = np.minimum(max_300[mask], count_50[mask])
 
         count_100[~mask] = np.minimum(max_300[~mask], count_100[~mask])
 
-        count_300 = (
-            len(self._hit_objects) -
-            count_100 -
-            count_50 -
-            count_miss
-        )
+        count_300 = len(self._hit_objects) - count_100 - count_50 - count_miss
 
         return count_300, count_100, count_50, count_miss
 
-    def performance_points(self,
-                           *,
-                           combo=None,
-                           accuracy=None,
-                           count_300=None,
-                           count_100=None,
-                           count_50=None,
-                           count_miss=None,
-                           no_fail=False,
-                           easy=False,
-                           hidden=False,
-                           hard_rock=False,
-                           double_time=False,
-                           half_time=False,
-                           flashlight=False,
-                           spun_out=False,
-                           version=1):
+    def performance_points(
+        self,
+        *,
+        combo=None,
+        accuracy=None,
+        count_300=None,
+        count_100=None,
+        count_50=None,
+        count_miss=None,
+        no_fail=False,
+        easy=False,
+        hidden=False,
+        hard_rock=False,
+        double_time=False,
+        half_time=False,
+        flashlight=False,
+        spun_out=False,
+        version=1,
+    ):
         """Compute the performance points for the given map.
 
         Parameters
@@ -3373,41 +3425,34 @@ class Beatmap:
         array([ 245.0240618 ,  249.77318802,  256.50049755,  266.24423831, 280.54452189,  301.66016166])
         """  # noqa
         if version not in {1, 2}:
-            raise ValueError(f'unknown PP version: {version}')
+            raise ValueError(f"unknown PP version: {version}")
 
         if combo is None:
             combo = self.max_combo
 
         if accuracy is not None:
-            if (count_300 is not None or
-                    count_100 is not None or
-                    count_50 is not None):
-                raise ValueError('cannot pass accuracy and hit counts')
+            if count_300 is not None or count_100 is not None or count_50 is not None:
+                raise ValueError("cannot pass accuracy and hit counts")
             # compute the closest hit counts for the accuracy
             accuracy = np.array(accuracy, ndmin=1, copy=False)
             count_300, count_100, count_50, count_miss = self._round_hitcounts(
                 accuracy,
-                np.full_like(accuracy, 0)
-                if count_miss is None else
-                count_miss,
+                np.full_like(accuracy, 0) if count_miss is None else count_miss,
             )
 
-        elif (count_300 is None and
-              count_100 is None and
-              count_50 is None):
+        elif count_300 is None and count_100 is None and count_50 is None:
             accuracy = np.array(1.0, ndmin=1, copy=False)
             count_300, count_100, count_50, count_miss = self._round_hitcounts(
                 accuracy,
-                np.full_like(accuracy, 0)
-                if count_miss is None else
-                count_miss,
+                np.full_like(accuracy, 0) if count_miss is None else count_miss,
             )
-        elif np.all(count_300 + count_100 + count_50 + count_miss !=
-                    len(self._hit_objects)):
+        elif np.all(
+            count_300 + count_100 + count_50 + count_miss != len(self._hit_objects),
+        ):
             s = count_300 + count_100 + count_50 + count_miss
             os = len(self._hit_objects)
             raise ValueError(
-                f"hit counts don't sum to the total for the map, {s} != {os}"
+                f"hit counts don't sum to the total for the map, {s} != {os}",
             )
 
         od = self.od(
@@ -3435,17 +3480,18 @@ class Beatmap:
         count_hit_objects = len(self._hit_objects)
         count_hit_objects_over_2000 = count_hit_objects / 2000
         length_bonus = (
-            0.95 +
-            0.4 * np.minimum(1.0, count_hit_objects_over_2000) + (
+            0.95
+            + 0.4 * np.minimum(1.0, count_hit_objects_over_2000)
+            + (
                 np.log10(count_hit_objects_over_2000) * 0.5
-                if count_hit_objects > 2000 else
-                0
+                if count_hit_objects > 2000
+                else 0
             )
         )
 
-        miss_penalty = 0.97 ** count_miss
+        miss_penalty = 0.97**count_miss
 
-        combo_break_penalty = combo ** 0.8 / self.max_combo ** 0.8
+        combo_break_penalty = combo**0.8 / self.max_combo**0.8
 
         ar_bonus = 1
         if ar > 10.33:
@@ -3460,33 +3506,33 @@ class Beatmap:
 
         hidden_bonus = 1.18 if hidden else 1
         flashlight_bonus = (1.45 * length_bonus) if flashlight else 1
-        od_bonus = 0.98 + od ** 2 / 2500
+        od_bonus = 0.98 + od**2 / 2500
 
         mods = {
-            'easy': easy,
-            'hard_rock': hard_rock,
-            'half_time': half_time,
-            'double_time': double_time,
+            "easy": easy,
+            "hard_rock": hard_rock,
+            "half_time": half_time,
+            "double_time": double_time,
         }
         aim_score = (
-            self._base_strain(self.aim_stars(**mods)) *
-            length_bonus *
-            miss_penalty *
-            combo_break_penalty *
-            ar_bonus *
-            accuracy_bonus *
-            hidden_bonus *
-            flashlight_bonus *
-            od_bonus
+            self._base_strain(self.aim_stars(**mods))
+            * length_bonus
+            * miss_penalty
+            * combo_break_penalty
+            * ar_bonus
+            * accuracy_bonus
+            * hidden_bonus
+            * flashlight_bonus
+            * od_bonus
         )
 
         speed_score = (
-            self._base_strain(self.speed_stars(**mods)) *
-            length_bonus *
-            miss_penalty *
-            combo_break_penalty *
-            accuracy_bonus *
-            od_bonus
+            self._base_strain(self.speed_stars(**mods))
+            * length_bonus
+            * miss_penalty
+            * combo_break_penalty
+            * accuracy_bonus
+            * od_bonus
         )
 
         if version == 2:
@@ -3494,13 +3540,13 @@ class Beatmap:
             real_accuracy = accuracy
         else:
             count_circles = len(
-                self.hit_objects(circles=True, sliders=False, spinners=False)
+                self.hit_objects(circles=True, sliders=False, spinners=False),
             )
             if count_circles:
                 real_accuracy = (
-                    (count_300 - (count_hit_objects - count_circles)) * 300.0 +
-                    count_100 * 100.0 +
-                    count_50 * 50.0
+                    (count_300 - (count_hit_objects - count_circles)) * 300.0
+                    + count_100 * 100.0
+                    + count_50 * 50.0
                 ) / (count_circles * 300)
                 real_accuracy = np.maximum(real_accuracy, 0)
             else:
@@ -3510,10 +3556,12 @@ class Beatmap:
         accuracy_hidden_bonus = 1.02 if hidden else 1
         accuracy_flashlight_bonus = 1.02 if flashlight else 1
         accuracy_score = (
-            1.52163 ** od * real_accuracy ** 24.0 * 2.83 *
-            accuracy_length_bonus *
-            accuracy_hidden_bonus *
-            accuracy_flashlight_bonus
+            1.52163**od
+            * real_accuracy**24.0
+            * 2.83
+            * accuracy_length_bonus
+            * accuracy_hidden_bonus
+            * accuracy_flashlight_bonus
         )
 
         final_multiplier = 1.12
@@ -3522,11 +3570,9 @@ class Beatmap:
         if spun_out:
             final_multiplier *= 0.95
 
-        out = (
-            (aim_score ** 1.1) +
-            (speed_score ** 1.1) +
-            (accuracy_score ** 1.1)
-        ) ** (1 / 1.1) * final_multiplier
+        out = ((aim_score**1.1) + (speed_score**1.1) + (accuracy_score**1.1)) ** (
+            1 / 1.1
+        ) * final_multiplier
 
         if np.shape(out) == (1,):
             out = np.asscalar(out)

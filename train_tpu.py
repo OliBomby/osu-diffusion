@@ -1,9 +1,12 @@
 """
 A minimal training script for DiT using PyTorch DDP.
 """
+import argparse
+import os
+from glob import glob
 
+import numpy as np
 import torch
-
 import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.debug.metrics as met
@@ -11,20 +14,16 @@ import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
 import torch_xla.utils.utils as xu
 
-import numpy as np
-from glob import glob
-import argparse
-import os
-
-from models import DiT_models
+from data_loading import context_size
+from data_loading import get_processed_data_loader
 from diffusion import create_diffusion
-
-from data_loading import get_processed_data_loader, context_size
+from models import DiT_models
 
 
 #################################################################################
 #                                  Training Loop                                #
 #################################################################################
+
 
 def train(args, wrapped_model):
     """
@@ -32,7 +31,9 @@ def train(args, wrapped_model):
     """
 
     # Setup DDP:
-    assert args.global_batch_size % xm.xrt_world_size() == 0, f"Batch size must be divisible by world size."
+    assert (
+        args.global_batch_size % xm.xrt_world_size() == 0
+    ), f"Batch size must be divisible by world size."
     rank = xm.get_ordinal()
     device = xm.xla_device()
 
@@ -43,18 +44,30 @@ def train(args, wrapped_model):
     # Setup an experiment folder:
     checkpoint_dir = ""
     if rank == 0:
-        os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
+        os.makedirs(
+            args.results_dir,
+            exist_ok=True,
+        )  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
-        model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
+        model_string_name = args.model.replace(
+            "/",
+            "-",
+        )  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
         experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
-        checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
+        checkpoint_dir = (
+            f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
+        )
         os.makedirs(checkpoint_dir, exist_ok=True)
         print(f"[xla:{rank}] Experiment directory created at {experiment_dir}")
 
     model = wrapped_model.to(device)
 
-    diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
-    print(f"[xla:{rank}] DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    diffusion = create_diffusion(
+        timestep_respacing="",
+    )  # default: 1000 steps, linear noise schedule
+    print(
+        f"[xla:{rank}] DiT Parameters: {sum(p.numel() for p in model.parameters()):,}",
+    )
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     # Scale learning rate to world size
@@ -81,9 +94,11 @@ def train(args, wrapped_model):
         num_workers=args.num_workers,
         shuffle=True,
         pin_memory=True,
-        drop_last=True
+        drop_last=True,
     )
-    print(f"[xla:{rank}] Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})")
+    print(
+        f"[xla:{rank}] Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})",
+    )
 
     # Prepare models for training:
     model.train()  # important! This enables embedding dropout for classifier-free guidance
@@ -117,8 +132,14 @@ def train(args, wrapped_model):
             if train_steps % args.log_every == 0:
                 # Reduce loss history over all processes:
                 avg_loss = torch.tensor(running_loss / log_steps, device=device)
-                reduce_avg_loss = xm.all_reduce(xm.REDUCE_SUM, avg_loss, 1 / xm.xrt_world_size())
-                print(f"[xla:{rank}]({train_steps}) Loss={reduce_avg_loss:.5f} Rate={tracker.rate():.2f} GlobalRate={tracker.global_rate():.2f}")
+                reduce_avg_loss = xm.all_reduce(
+                    xm.REDUCE_SUM,
+                    avg_loss,
+                    1 / xm.xrt_world_size(),
+                )
+                print(
+                    f"[xla:{rank}]({train_steps}) Loss={reduce_avg_loss:.5f} Rate={tracker.rate():.2f} GlobalRate={tracker.global_rate():.2f}",
+                )
                 # Reset monitoring variables:
                 running_loss = 0
                 log_steps = 0
@@ -129,7 +150,7 @@ def train(args, wrapped_model):
                     checkpoint = {
                         "model": model.module.state_dict(),
                         "opt": opt.state_dict(),
-                        "args": args
+                        "args": args,
                     }
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pt"
                     xm.save(checkpoint, checkpoint_path)
@@ -143,7 +164,7 @@ def train(args, wrapped_model):
 
 # Start training processes
 def _mp_fn(rank, args, wrapped_model):
-    torch.set_default_tensor_type('torch.FloatTensor')
+    torch.set_default_tensor_type("torch.FloatTensor")
     train(args, wrapped_model)
 
 
@@ -151,19 +172,24 @@ def main(args):
     # Create model:
     model = DiT_models[args.model](
         num_classes=args.num_classes,
-        context_size=context_size
+        context_size=context_size,
     )
 
     wrapped_model = xmp.MpModelWrapper(model)
 
-    xmp.spawn(_mp_fn, args=(args, wrapped_model), nprocs=args.num_cores, start_method='fork')
+    xmp.spawn(
+        _mp_fn,
+        args=(args, wrapped_model),
+        nprocs=args.num_cores,
+        start_method="fork",
+    )
 
 
 SERIAL_EXEC = xmp.MpSerialExecutor()
 
 
 if __name__ == "__main__":
-    os.environ['XLA_USE_F16'] = "1"
+    os.environ["XLA_USE_F16"] = "1"
 
     # Default args here will train DiT-XL with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
@@ -172,7 +198,12 @@ if __name__ == "__main__":
     parser.add_argument("--data-end", type=int, required=True)
     parser.add_argument("--data-start", type=int, default=0)
     parser.add_argument("--results-dir", type=str, default="results")
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL")
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=list(DiT_models.keys()),
+        default="DiT-XL",
+    )
     parser.add_argument("--epochs", type=int, default=140)
     parser.add_argument("--global-batch-size", type=int, default=256)
     parser.add_argument("--global-seed", type=int, default=0)
