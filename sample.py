@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-B")
     parser.add_argument("--num-classes", type=int, default=52670)
-    parser.add_argument("--cfg-scale", type=float, default=1.0)
+    parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seq-len", type=int, default=128)
