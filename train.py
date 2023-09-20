@@ -147,8 +147,7 @@ def main(args):
     logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
-    learning_rate = 1e-5 if args.slow_lr else 1e-4
-    opt = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0)
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
 
     # Setup data:
@@ -305,6 +304,6 @@ if __name__ == "__main__":
     parser.add_argument("--fine-tune-ids", type=str, default=None)
     parser.add_argument("--noise-schedule", type=str, default="squaredcos_cap_v2")
     parser.add_argument("--l1-loss", type=bool, default=True)
-    parser.add_argument("--slow-lr", type=bool, default=False)
+    parser.add_argument("--lr", type=float, default=1e-4)
     args = parser.parse_args()
     main(args)
