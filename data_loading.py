@@ -144,7 +144,7 @@ def random_flip(seq: torch.Tensor) -> torch.Tensor:
 
 def split_and_process_sequence(
     seq: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], int]:
     offset = torch.roll(seq[:2, :], 1, 1)
     offset[0, 0] = 256
     offset[1, 0] = 192
