@@ -197,14 +197,12 @@ class BeatmapDatasetIterable:
     def __init__(
         self,
         beatmap_files: list[str],
-        beatmap_idx: dict[int, int],
         seq_len: int,
         stride: int,
         seq_func: Callable | None = None,
         win_func: Callable | None = None,
     ):
         self.beatmap_files = beatmap_files
-        self.beatmap_idx = beatmap_idx
         self.seq_len = seq_len
         self.stride = stride
         self.index = 0
@@ -232,7 +230,7 @@ class BeatmapDatasetIterable:
             beatmap_path = self.beatmap_files[self.index]
             beatmap = Beatmap.from_path(beatmap_path)
 
-            self.current_idx = self.beatmap_idx[beatmap.beatmap_id]
+            self.current_idx = int(os.path.basename(beatmap_path)[:6])
             self.current_seq, self.current_seq_len = self.seq_func(beatmap)
             self.seq_index = random.randint(0, self.stride - 1)
             self.index += 1
@@ -253,7 +251,6 @@ class InterleavingBeatmapDatasetIterable:
     def __init__(
         self,
         beatmap_files: list[str],
-        beatmap_idx: dict[int, int],
         seq_len: int,
         stride: int,
         cycle_length: int,
@@ -266,7 +263,6 @@ class InterleavingBeatmapDatasetIterable:
                 beatmap_files[
                     i * per_worker : min(len(beatmap_files), (i + 1) * per_worker)
                 ],
-                beatmap_idx,
                 seq_len,
                 stride,
                 seq_func,
@@ -297,7 +293,6 @@ class BeatmapDataset(IterableDataset):
     def __init__(
         self,
         dataset_path: str,
-        beatmap_idx: dict[int, int],
         start: int,
         end: int,
         seq_len: int,
@@ -310,7 +305,6 @@ class BeatmapDataset(IterableDataset):
     ):
         super(BeatmapDataset).__init__()
         self.dataset_path = dataset_path
-        self.beatmap_idx = beatmap_idx
         self.start = start
         self.end = end
         self.seq_len = seq_len
@@ -369,7 +363,6 @@ class BeatmapDataset(IterableDataset):
         if self.cycle_length > 1:
             return InterleavingBeatmapDatasetIterable(
                 beatmap_files,
-                self.beatmap_idx,
                 self.seq_len,
                 self.stride,
                 self.cycle_length,
@@ -379,7 +372,6 @@ class BeatmapDataset(IterableDataset):
 
         return BeatmapDatasetIterable(
             beatmap_files,
-            self.beatmap_idx,
             self.seq_len,
             self.stride,
             self.seq_func,
@@ -426,7 +418,6 @@ def get_processed_data_loader(
 ) -> DataLoader:
     dataset = BeatmapDataset(
         dataset_path=dataset_path,
-        beatmap_idx=get_beatmap_idx(),
         start=start,
         end=end,
         seq_len=seq_len,
@@ -457,7 +448,7 @@ if __name__ == "__main__":
     # import pandas as pd
     # subset_ids = pd.read_csv("C:\\Users\\Olivier\\Documents\\GitHub\\osu-diffusion\\results\\tags\\clean_10000.csv")["BeatmapID"].tolist()
     dataloader = get_processed_data_loader(
-        dataset_path="D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS13402",
+        dataset_path="D:\\Osu! Dingen\\Beatmap ML Datasets\\ORS16291",
         start=0,
         end=13402,
         seq_len=128,
