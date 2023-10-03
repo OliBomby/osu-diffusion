@@ -53,6 +53,16 @@ def requires_grad(model, flag=True):
         p.requires_grad = flag
 
 
+def requires_grad_non_embed(model, flag=True):
+    """
+    Set requires_grad flag for all parameters in a model except the embedding table weights.
+    """
+    for name, param in model.named_parameters():
+        if name == "y_embedder.embedding_table.weight":
+            continue
+        param.requires_grad = flag
+
+
 def cleanup():
     """
     End DDP training.
@@ -138,7 +148,8 @@ def main(args):
         device,
     )  # Create an EMA of the model for use after training
     requires_grad(ema, False)
-    model = DDP(model.to(device), device_ids=[rank])
+
+    model = DDP(model.to(device), device_ids=[rank], find_unused_parameters=args.embed_only_epochs > 0)
     diffusion = create_diffusion(
         timestep_respacing="",
         noise_schedule=args.noise_schedule,
@@ -199,11 +210,24 @@ def main(args):
             args.ckpt,
         ), f"Could not find DiT checkpoint at {args.ckpt}"
         checkpoint = torch.load(args.ckpt, map_location=lambda storage, loc: storage)
-        model.module.load_state_dict(checkpoint["model"])
-        ema.load_state_dict(checkpoint["ema"])
+
+        # Update the learning rate to what you want
+        checkpoint["opt"]["param_groups"][0]["lr"] = args.lr
+
+        if args.relearn_embeds:
+            del checkpoint["model"]["y_embedder.embedding_table.weight"]
+            del checkpoint["ema"]["y_embedder.embedding_table.weight"]
+            del checkpoint["opt"]["state"][7]
+
+        model.module.load_state_dict(checkpoint["model"], not args.relearn_embeds)
+        ema.load_state_dict(checkpoint["ema"], not args.relearn_embeds)
         opt.load_state_dict(checkpoint["opt"])
         scaler.load_state_dict(checkpoint["scaler"])
         logger.info(f"Restored from checkpoint at {args.ckpt}")
+
+    if args.embed_only_epochs > 0:
+        logger.info(f"Freezing non-embedding layers for {args.embed_only_epochs} epochs")
+        requires_grad_non_embed(model.module, False)
 
     # Variables for monitoring/logging purposes:
     train_steps = 0
@@ -214,6 +238,13 @@ def main(args):
     logger.info(f"Training for {args.epochs} epochs...")
     for epoch in range(args.epochs):
         logger.info(f"Beginning epoch {epoch}...")
+
+        if 0 < args.embed_only_epochs == epoch:
+            logger.info(f"Un-freezing non-embedding layers")
+            requires_grad_non_embed(model.module, True)
+            for g in opt.param_groups:
+                g["lr"] = 1e-4
+
         for (x, o, c), y in loader:
             x = x.to(device)
             o = o.to(device)
@@ -305,5 +336,7 @@ if __name__ == "__main__":
     parser.add_argument("--noise-schedule", type=str, default="squaredcos_cap_v2")
     parser.add_argument("--l1-loss", type=bool, default=True)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--relearn-embeds", type=bool, default=False)
+    parser.add_argument("--embed-only-epochs", type=int, default=0)
     args = parser.parse_args()
     main(args)
