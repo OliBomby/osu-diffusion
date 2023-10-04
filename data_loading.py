@@ -142,13 +142,18 @@ def random_flip(seq: torch.Tensor) -> torch.Tensor:
     return seq
 
 
-def split_and_process_sequence(
-    seq: torch.Tensor,
-) -> tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], int]:
+def calc_distances(seq: torch.Tensor) -> torch.Tensor:
     offset = torch.roll(seq[:2, :], 1, 1)
     offset[0, 0] = 256
     offset[1, 0] = 192
     seq_d = torch.linalg.vector_norm(seq[:2, :] - offset, ord=2, dim=0)
+    return seq_d
+
+
+def split_and_process_sequence(
+    seq: torch.Tensor,
+) -> tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], int]:
+    seq_d = calc_distances(seq)
     # Augment and normalize positions for diffusion
     seq_x = random_flip(seq[:2, :]) / playfield_size.unsqueeze(1)
     seq_o = seq[2, :]
