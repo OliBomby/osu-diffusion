@@ -84,7 +84,7 @@ def main(args):
 
     # Labels to condition the model with (feel free to change):
     if args.style_id is not None:
-        beatmap_idx = get_beatmap_idx()
+        beatmap_idx = get_beatmap_idx(args.beatmap_idx)
         idx = beatmap_idx[args.style_id]
         class_labels = [idx + i for i in range(args.num_variants)]
     else:
@@ -189,6 +189,7 @@ if __name__ == "__main__":
         default="DiT-B",
     )
     parser.add_argument("--num-classes", type=int, default=52670)
+    parser.add_argument("--beatmap-idx", type=str, default="beatmap_idx.pickle")
     parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)

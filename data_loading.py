@@ -393,8 +393,8 @@ def worker_init_fn(worker_id: int) -> None:
     dataset.end = min(dataset.start + per_worker, overall_end)
 
 
-def get_beatmap_idx() -> dict[int, int]:
-    p = Path(__file__).with_name("beatmap_idx.pickle")
+def get_beatmap_idx(name) -> dict[int, int]:
+    p = Path(__file__).with_name(name)
     with p.open("rb") as f:
         beatmap_idx = pickle.load(f)
     return beatmap_idx
