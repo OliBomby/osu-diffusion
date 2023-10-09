@@ -6,6 +6,7 @@ import random
 from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
+from typing import Optional
 
 import torch
 from torch.utils.data import DataLoader
@@ -51,7 +52,7 @@ def append_control_points(
     datapoints: list[torch.Tensor],
     slider: Slider,
     datatype: int,
-    duration: float,
+    duration: timedelta,
 ):
     control_point_count = len(slider.curve.points)
 
@@ -72,7 +73,7 @@ def get_data(hitobj: HitObject) -> torch.Tensor:
         ]
 
         assert hitobj.repeat >= 1
-        duration: float = (hitobj.end_time - hitobj.time) / hitobj.repeat
+        duration: timedelta = (hitobj.end_time - hitobj.time) / hitobj.repeat
 
         if isinstance(hitobj.curve, Linear):
             append_control_points(datapoints, hitobj, 9, duration)
@@ -204,8 +205,8 @@ class BeatmapDatasetIterable:
         beatmap_files: list[str],
         seq_len: int,
         stride: int,
-        seq_func: Callable | None = None,
-        win_func: Callable | None = None,
+        seq_func: Optional[Callable] = None,
+        win_func: Optional[Callable] = None,
     ):
         self.beatmap_files = beatmap_files
         self.seq_len = seq_len
@@ -223,7 +224,7 @@ class BeatmapDatasetIterable:
     def __iter__(self) -> "BeatmapDatasetIterable":
         return self
 
-    def __next__(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
+    def __next__(self) -> tuple[any, int]:
         while (
             self.current_seq is None
             or self.seq_index + self.seq_len > self.current_seq_len
@@ -259,8 +260,8 @@ class InterleavingBeatmapDatasetIterable:
         seq_len: int,
         stride: int,
         cycle_length: int,
-        seq_func: Callable | None = None,
-        win_func: Callable | None = None,
+        seq_func: Optional[Callable] = None,
+        win_func: Optional[Callable] = None,
     ):
         per_worker = int(math.ceil(len(beatmap_files) / float(cycle_length)))
         self.workers = [
@@ -281,7 +282,7 @@ class InterleavingBeatmapDatasetIterable:
     def __iter__(self) -> "InterleavingBeatmapDatasetIterable":
         return self
 
-    def __next__(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
+    def __next__(self) -> tuple[any, int]:
         num = len(self.workers)
         for _ in range(num):
             try:
@@ -305,8 +306,8 @@ class BeatmapDataset(IterableDataset):
         cycle_length: int = 1,
         shuffle: bool = False,
         subset_ids: list[int] | None = None,
-        seq_func: Callable | None = None,
-        win_func: Callable | None = None,
+        seq_func: Optional[Callable] = None,
+        win_func: Optional[Callable] = None,
     ):
         super(BeatmapDataset).__init__()
         self.dataset_path = dataset_path
@@ -418,8 +419,8 @@ def get_processed_data_loader(
     pin_memory: bool = False,
     drop_last: bool = False,
     subset_ids: list[int] | None = None,
-    seq_func: Callable | None = None,
-    win_func: Callable | None = None,
+    seq_func: Optional[Callable] = None,
+    win_func: Optional[Callable] = None,
 ) -> DataLoader:
     dataset = BeatmapDataset(
         dataset_path=dataset_path,
