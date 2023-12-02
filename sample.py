@@ -190,7 +190,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num-classes", type=int, default=52670)
     parser.add_argument("--beatmap-idx", type=str, default="beatmap_idx.pickle")
-    parser.add_argument("--cfg-scale", type=float, default=4.0)
+    parser.add_argument("--cfg-scale", type=float, default=1.0)
     parser.add_argument("--num-sampling-steps", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seq-len", type=int, default=128)
