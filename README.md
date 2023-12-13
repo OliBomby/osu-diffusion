@@ -29,6 +29,10 @@ Other dependencies:
 
 
 ## How to sample new beatmaps
+The easiest way to create your own beatmaps is to use our [colab notebook.](https://github.com/OliBomby/osu-diffusion/blob/master/colab/osu_diffusion_sample.ipynb)
+
+***
+
 `sample.py` lets you generate new beatmaps using the rhythm and spacing from an existing beatmap.
 You can also provide a specific style to map in by providing the beatmap ID of a map in the training data.
 
