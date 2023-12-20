@@ -205,8 +205,8 @@ class BeatmapDatasetIterable:
         beatmap_files: list[str],
         seq_len: int,
         stride: int,
-        seq_func: Optional[Callable] = None,
-        win_func: Optional[Callable] = None,
+        seq_func: Callable,
+        win_func: Callable,
     ):
         self.beatmap_files = beatmap_files
         self.seq_len = seq_len
@@ -216,10 +216,8 @@ class BeatmapDatasetIterable:
         self.current_seq = None
         self.current_seq_len = -1
         self.seq_index = 0
-        self.seq_func = (
-            seq_func if seq_func is not None else lambda x: beatmap_to_sequence(x)
-        )
-        self.win_func = win_func if win_func is not None else lambda x, s, e: x[:, s:e]
+        self.seq_func = seq_func
+        self.win_func = win_func
 
     def __iter__(self) -> "BeatmapDatasetIterable":
         return self
