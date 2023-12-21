@@ -1,0 +1,69 @@
+osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+AudioLeadIn: 0
+PreviewTime: -1
+Countdown: 0
+SampleSet: Normal
+StackLeniency: 0
+Mode: 0
+LetterboxInBreaks: 0
+OverlayPosition: Above
+WidescreenStoryboard: 1
+
+[Editor]
+DistanceSpacing: 2.4
+BeatDivisor: 4
+GridSize: 16
+TimelineZoom: 1.400006
+
+[Metadata]
+Title:stream
+TitleUnicode:stream
+Artist:test
+ArtistUnicode:test
+Creator:OliBomby
+Version:test17
+Source:
+Tags:
+BeatmapID:0
+BeatmapSetID:-1
+
+[Difficulty]
+HPDrainRate:4
+CircleSize:4
+OverallDifficulty:4
+ApproachRate:4
+SliderMultiplier:1
+SliderTickRate:1
+
+[Events]
+//Background and Video events
+0,0,"black.jpg",0,0
+//Break Periods
+//Storyboard Layer 0 (Background)
+//Storyboard Layer 1 (Fail)
+//Storyboard Layer 2 (Pass)
+//Storyboard Layer 3 (Foreground)
+//Storyboard Layer 4 (Overlay)
+//Storyboard Sound Samples
+
+[TimingPoints]
+0,300,4,1,0,100,1,0
+
+
+[HitObjects]
+120,334,300,1,0,0:0:0:0:
+144,331,375,1,0,0:0:0:0:
+166,319,450,1,0,0:0:0:0:
+183,301,525,1,0,0:0:0:0:
+250,283,600,5,0,0:0:0:0:
+248,258,675,1,0,0:0:0:0:
+237,236,750,1,0,0:0:0:0:
+220,218,825,1,0,0:0:0:0:
+156,187,900,5,0,0:0:0:0:
+163,164,975,1,0,0:0:0:0:
+180,145,1050,1,0,0:0:0:0:
+201,132,1125,1,0,0:0:0:0:
+232,70,1200,5,0,0:0:0:0:

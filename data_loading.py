@@ -169,6 +169,24 @@ def split_and_process_sequence(
     return (seq_x, seq_o, seq_c), seq.shape[1]
 
 
+def split_and_process_sequence_no_augment(
+    seq: torch.Tensor,
+) -> tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], int]:
+    seq_d = calc_distances(seq)
+    # Augment and normalize positions for diffusion
+    seq_x = seq[:2, :] / playfield_size.unsqueeze(1)
+    seq_o = seq[2, :]
+    seq_c = torch.concatenate(
+        [
+            timestep_embedding(seq_d, 128).T,
+            seq[3:, :],
+        ],
+        0,
+    )
+
+    return (seq_x, seq_o, seq_c), seq.shape[1]
+
+
 def load_and_process_beatmap(beatmap: Beatmap):
     seq = beatmap_to_sequence(beatmap)
     return split_and_process_sequence(seq)
