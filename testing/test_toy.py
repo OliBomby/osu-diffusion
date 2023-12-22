@@ -26,7 +26,7 @@ def find_model(ckpt_path):
     return checkpoint
 
 
-def generate_predictions(model, diffusion, device, seq_no_embed, args):
+def generate_predictions(model, diffusion, device, seq_no_embed, args, progress=False):
     (seq_x, seq_o, seq_c), seq_len = split_and_process_sequence_no_augment(seq_no_embed.squeeze(0))
     seq_o = seq_o - seq_o[0]  # Normalize to relative time
 
@@ -58,7 +58,7 @@ def generate_predictions(model, diffusion, device, seq_no_embed, args):
         denoised_fn=in_paint_mask,
         clip_denoised=True,
         model_kwargs=model_kwargs,
-        progress=False,
+        progress=progress,
         device=device,
     )
 
@@ -129,6 +129,21 @@ def main(args):
         noise_schedule="squaredcos_cap_v2",
     )
 
+    if args.generate is not None:
+        generate_path = os.path.join("testing", "toy_datasets", args.generate)
+        beatmap = Beatmap.from_path(generate_path)
+        (seq, pos) = example_from_beatmap(beatmap)
+        seq, pos = seq.to(device), pos.to(device)
+        predictions = generate_predictions(model, diffusion, device, seq, args, progress=True)
+        distances = torch.norm(predictions - pos, dim=1)
+        # noinspection PyTypeChecker
+        good_count = torch.sum(distances < 30).item()
+        print(f"Generate example correct predictions = {good_count / len(predictions) * 100}% ({good_count}/{len(predictions)})")
+        for p in predictions.cpu():
+            print(f"{round(p[0].item())},{round(p[1].item())},{round(seq[2, -1].item())},1,0,0:0:0:0:")
+        return
+
+
     for test in args.tests:
         print(test)
 
@@ -174,5 +189,6 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--num-predictions", type=int, default=100)
     parser.add_argument("--tests", type=list[str], default=datasets)
+    parser.add_argument("--generate", type=str, default=None)
     args = parser.parse_args()
     main(args)

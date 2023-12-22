@@ -174,7 +174,7 @@ def split_and_process_sequence_no_augment(
 ) -> tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], int]:
     seq_d = calc_distances(seq)
     # Augment and normalize positions for diffusion
-    seq_x = seq[:2, :] / playfield_size.unsqueeze(1)
+    seq_x = seq[:2, :] / playfield_size.to(seq.device).unsqueeze(1)
     seq_o = seq[2, :]
     seq_c = torch.concatenate(
         [
