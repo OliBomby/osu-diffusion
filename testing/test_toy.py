@@ -18,6 +18,9 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
 
+filler_seq = beatmap_to_sequence(Beatmap.from_path(os.path.join("testing", "toy_datasets", "kimi_no_bouken.osu")))
+
+
 def find_model(ckpt_path):
     assert os.path.isfile(ckpt_path), f"Could not find DiT checkpoint at {ckpt_path}"
     checkpoint = torch.load(ckpt_path, map_location=lambda storage, loc: storage)
@@ -30,6 +33,14 @@ def generate_predictions(model, diffusion, device, seq_no_embed, args, progress=
     (seq_x, seq_o, seq_c), seq_len = split_and_process_sequence_no_augment(seq_no_embed.squeeze(0))
     seq_o = seq_o - seq_o[0]  # Normalize to relative time
 
+    # Create banded matrix attention mask for increased sequence length
+    attn_mask = None
+    max_seq_len = 128
+    if seq_len > max_seq_len:
+        attn_mask = torch.full((seq_len, seq_len), True, dtype=torch.bool, device=device)
+        for i in range(seq_len):
+            attn_mask[max(0, i - max_seq_len) : min(seq_len, i + max_seq_len), i] = False
+
     # Use null class
     class_labels = [args.num_classes for _ in range(args.num_predictions)]
 
@@ -40,7 +51,7 @@ def generate_predictions(model, diffusion, device, seq_no_embed, args, progress=
     c = seq_c.repeat(n, 1, 1).to(device)
     y = torch.tensor(class_labels, device=device)
 
-    model_kwargs = dict(o=o, c=c, y=y)
+    model_kwargs = dict(o=o, c=c, y=y, attn_mask=attn_mask)
 
     # Make in-paint mask
     mask = torch.full_like(z, False, dtype=torch.bool, device=device)
@@ -65,7 +76,7 @@ def generate_predictions(model, diffusion, device, seq_no_embed, args, progress=
     return samples[:, :, -1] * playfield_size.to(device).unsqueeze(0)
 
 
-def example_from_beatmap(beatmap):
+def example_from_beatmap(beatmap, args):
     seq = beatmap_to_sequence(beatmap)
     hit_objects = beatmap.hit_objects(spinners=False)
     posterior = hit_objects[-1]
@@ -87,15 +98,26 @@ def example_from_beatmap(beatmap):
 
     assert (seq[:2, -1] == label).all()
 
+    # Fix length to seq_len
+    if args.seq_len is not None:
+        if args.seq_len > seq.shape[1]:
+            to_add = args.seq_len - seq.shape[1]
+            filler_add = filler_seq[:, -to_add:]
+            # Fix the timing offset
+            seq[2] += filler_add[2, -1] - seq[2, 0] + 300
+            seq = torch.concatenate([filler_add, seq], dim=1)
+        elif args.seq_len < seq.shape[1]:
+            seq = seq[:, -args.seq_len:]
+
     return seq, label
 
 
-def load_example_folder(name):
+def load_example_folder(name, args):
     data = []
     for filename in os.listdir(os.path.join("testing", "toy_datasets", name)):
         path = os.path.join("testing", "toy_datasets", name, filename)
         beatmap = Beatmap.from_path(path)
-        example = example_from_beatmap(beatmap)
+        example = example_from_beatmap(beatmap, args)
         data.append(example)
     return CachedDataset(data)
 
@@ -132,7 +154,8 @@ def main(args):
     if args.generate is not None:
         generate_path = os.path.join("testing", "toy_datasets", args.generate)
         beatmap = Beatmap.from_path(generate_path)
-        (seq, pos) = example_from_beatmap(beatmap)
+        end_time = beatmap.hit_objects()[-1].time.total_seconds() * 1000
+        (seq, pos) = example_from_beatmap(beatmap, args)
         seq, pos = seq.to(device), pos.to(device)
         predictions = generate_predictions(model, diffusion, device, seq, args, progress=True)
         distances = torch.norm(predictions - pos, dim=1)
@@ -140,14 +163,14 @@ def main(args):
         good_count = torch.sum(distances < 30).item()
         print(f"Generate example correct predictions = {good_count / len(predictions) * 100}% ({good_count}/{len(predictions)})")
         for p in predictions.cpu():
-            print(f"{round(p[0].item())},{round(p[1].item())},{round(seq[2, -1].item())},1,0,0:0:0:0:")
+            print(f"{round(p[0].item())},{round(p[1].item())},{round(end_time)},1,0,0:0:0:0:")
         return
 
 
     for test in args.tests:
         print(test)
 
-        test_dataloader = get_dataloader(load_example_folder(test))
+        test_dataloader = get_dataloader(load_example_folder(test, args))
 
         num_predictions = 0
         num_good_predictions = 0
@@ -190,5 +213,6 @@ if __name__ == "__main__":
     parser.add_argument("--num-predictions", type=int, default=100)
     parser.add_argument("--tests", type=list[str], default=datasets)
     parser.add_argument("--generate", type=str, default=None)
+    parser.add_argument("--seq-len", type=int, default=None)
     args = parser.parse_args()
     main(args)
