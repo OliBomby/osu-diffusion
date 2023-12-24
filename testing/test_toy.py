@@ -148,7 +148,7 @@ def main(args):
     model.eval()  # important!
     diffusion = create_diffusion(
         str(args.num_sampling_steps),
-        noise_schedule="squaredcos_cap_v2",
+        noise_schedule=args.noise_schedule,
     )
 
     if args.generate is not None:
@@ -214,5 +214,6 @@ if __name__ == "__main__":
     parser.add_argument("--tests", type=list[str], default=datasets)
     parser.add_argument("--generate", type=str, default=None)
     parser.add_argument("--seq-len", type=int, default=None)
+    parser.add_argument("--noise-schedule", type=str, default="squaredcos_cap_v2")
     args = parser.parse_args()
     main(args)
