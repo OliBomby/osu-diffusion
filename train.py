@@ -21,10 +21,10 @@ from models import DiT_models
 from diffusion import create_diffusion
 
 from data_loading import (
-    get_processed_data_loader,
+    get_data_loader,
     feature_size,
     window_and_relative_time,
-    load_and_process_beatmap,
+    load_and_process_beatmap, BeatmapDatasetIterableFactory,
 )
 
 
@@ -162,12 +162,6 @@ def main(args):
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
 
     # Setup data:
-    subset_ids = None
-    if args.fine_tune_ids is not None:
-        import pandas as pd
-
-        subset_ids = pd.read_csv(args.fine_tune_ids)["BeatmapID"].tolist()
-
     global_start = args.data_start
     global_end = args.data_end
     per_rank = int(np.ceil((global_end - global_start) / float(world_size)))
@@ -175,21 +169,22 @@ def main(args):
     dataset_end = min(dataset_start + per_rank, global_end)
     batch_size = int(args.global_batch_size // world_size)
 
-    loader = get_processed_data_loader(
+    loader = get_data_loader(
         dataset_path=args.data_path,
         start=dataset_start,
         end=dataset_end,
-        seq_len=args.seq_len,
-        stride=args.stride,
+        iterable_factory=BeatmapDatasetIterableFactory(
+            args.seq_len,
+            args.stride,
+            load_and_process_beatmap,
+            window_and_relative_time,
+        ),
         cycle_length=batch_size // 2,
         batch_size=batch_size,
         num_workers=args.num_workers,
         shuffle=True,
         pin_memory=True,
         drop_last=True,
-        subset_ids=subset_ids,
-        seq_func=load_and_process_beatmap,
-        win_func=window_and_relative_time,
     )
     logger.info(
         f"Dataset contains {(dataset_end - dataset_start):,} beatmap sets ({args.data_path})",
