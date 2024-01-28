@@ -110,6 +110,32 @@ def main(args):
         samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
         return torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
 
+    def save_sequence(sampled_seq):
+        # Save beatmaps:
+        for idx, seq in enumerate(sampled_seq):
+            try:
+                new_beatmap = create_beatmap(
+                    seq,
+                    beatmap,
+                    f"Diffusion {args.style_id} {idx} {datetime.now()}",
+                )
+                new_beatmap.write_path(
+                    os.path.join(
+                        result_dir,
+                        f"{beatmap.beatmap_id} result {args.style_id} {i}.osu",
+                    ),
+                )
+
+                if args.plot_time is not None:
+                    fig, ax = plt.subplots()
+                    plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
+                    ax.axis("equal")
+                    ax.set_xlim([0, 512])
+                    ax.set_ylim([384, 0])
+                    plt.show()
+            except Exception as e:
+                logging.error(f"Failed to create beatmap.", exc_info=e)
+
     # Sample images:
     sampled_seq = None
     if args.plot_time is not None and args.make_animation:
@@ -140,6 +166,7 @@ def main(args):
 
         ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=1000 // 24)
         ani.save(filename=os.path.join(result_dir, "animation.gif"), writer="pillow")
+        save_sequence(sampled_seq)
     else:
         samples = diffusion.p_sample_loop(
             model.forward_with_cfg,
@@ -151,31 +178,7 @@ def main(args):
             device=device,
         )
         sampled_seq = to_seq(samples)
-
-    # Save beatmaps:
-    for idx, seq in enumerate(sampled_seq):
-        try:
-            new_beatmap = create_beatmap(
-                seq,
-                beatmap,
-                f"Diffusion {args.style_id} {idx} {datetime.now()}",
-            )
-            new_beatmap.write_path(
-                os.path.join(
-                    result_dir,
-                    f"{beatmap.beatmap_id} result {args.style_id} {i}.osu",
-                ),
-            )
-
-            if args.plot_time is not None:
-                fig, ax = plt.subplots()
-                plot_beatmap(ax, new_beatmap, args.plot_time, args.plot_width)
-                ax.axis("equal")
-                ax.set_xlim([0, 512])
-                ax.set_ylim([384, 0])
-                plt.show()
-        except Exception as e:
-            logging.error(f"Failed to create beatmap.", exc_info=e)
+        save_sequence(sampled_seq)
 
 
 if __name__ == "__main__":
