@@ -9,6 +9,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 import torch
+import tqdm
 from matplotlib import animation
 
 from data_loading import beatmap_to_sequence
@@ -110,19 +111,21 @@ def main(args):
         samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
         return torch.concatenate([samples.cpu(), seq_no_embed[2:].repeat(n, 1, 1)], 1)
 
-    def save_sequence(sampled_seq):
+    def save_sequence(sampled_seq, iteration_number=None):
         # Save beatmaps:
         for idx, seq in enumerate(sampled_seq):
             try:
                 new_beatmap = create_beatmap(
                     seq,
                     beatmap,
-                    f"Diffusion {args.style_id} {idx} {datetime.now()}",
+                    f"Diffusion {args.style_id} {idx} {datetime.now()}" if iteration_number is None else
+                    f"Diffusion {args.style_id} {idx} {datetime.now()} {iteration_number}",
                 )
                 new_beatmap.write_path(
                     os.path.join(
                         result_dir,
-                        f"{beatmap.beatmap_id} result {args.style_id} {i}.osu",
+                        f"{beatmap.beatmap_id} result {args.style_id} {idx}.osu" if iteration_number is None else
+                        f"{beatmap.beatmap_id} result {args.style_id} {idx} {iteration_number}.osu",
                     ),
                 )
 
@@ -180,6 +183,27 @@ def main(args):
         sampled_seq = to_seq(samples)
         save_sequence(sampled_seq)
 
+        if args.refine_ckpt is not None:
+            # Refine result with refine model
+            state_dict = find_model(args.refine_ckpt)
+            model.load_state_dict(state_dict)
+
+            img = samples
+
+            for _ in tqdm.tqdm(range(args.refine_iters)):
+                t = torch.tensor([0] * img.shape[0], device=device)
+                with torch.no_grad():
+                    out = diffusion.p_sample(
+                        model.forward_with_cfg,
+                        img,
+                        t,
+                        clip_denoised=True,
+                        model_kwargs=model_kwargs,
+                    )
+                    img = out["sample"]
+
+            save_sequence(to_seq(img), args.refine_iters)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -203,6 +227,8 @@ if __name__ == "__main__":
     parser.add_argument("--plot-width", type=float, default=2000)
     parser.add_argument("--num-variants", type=int, default=1)
     parser.add_argument("--make-animation", type=bool, default=False)
+    parser.add_argument("--refine-ckpt", type=str, default=None)
+    parser.add_argument("--refine-iters", type=int, default=10)
     args = parser.parse_args()
     # for style_id in [2592760, 1451282, 1995061, 3697057, 2799753, 1772923, 1907310]:
     #     args.style_id = style_id
