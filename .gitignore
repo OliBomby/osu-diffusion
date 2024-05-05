@@ -6,3 +6,4 @@ Pipfile.lock
 logs/
 /embeddings/*.csv
 *.pickle
+__pycache__
