@@ -36,11 +36,11 @@ def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Bea
 
         match type_index:
             case 0:
-                hit_objects.append(Circle(pos, time, False, 0, 0))
+                hit_objects.append(Circle(pos, time, 0, new_combo=False))
             case 1:
-                hit_objects.append(Circle(pos, time, True, 0, 0))
+                hit_objects.append(Circle(pos, time, 0, new_combo=True))
             case 2:
-                curr_object = Spinner(pos, time, True, 0, time)
+                curr_object = Spinner(pos, time, 0, time, new_combo=True)
             case 3 if isinstance(curr_object, Spinner):
                 curr_object.end_time = time
                 hit_objects.append(curr_object)
@@ -48,7 +48,6 @@ def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Bea
                 curr_object = Slider(
                     position=pos,
                     time=time,
-                    new_combo=False,
                     combo_skip=0,
                     end_time=time,
                     hitsound=0,
@@ -61,6 +60,7 @@ def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Bea
                     ms_per_beat=0,
                     edge_sounds=[],
                     edge_additions=[],
+                    new_combo=False,
                 )
                 curr_slider_path = [pos]
                 curr_slider_type = "Bezier"
@@ -68,7 +68,6 @@ def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Bea
                 curr_object = Slider(
                     position=pos,
                     time=time,
-                    new_combo=True,
                     combo_skip=0,
                     end_time=time,
                     hitsound=0,
@@ -81,6 +80,7 @@ def create_beatmap(seq: torch.Tensor, ref_beatmap: Beatmap, version: str) -> Bea
                     ms_per_beat=0,
                     edge_sounds=[],
                     edge_additions=[],
+                    new_combo=True,
                 )
                 curr_slider_path = [pos]
                 curr_slider_type = "Bezier"
