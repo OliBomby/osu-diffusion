@@ -150,7 +150,7 @@ The time values in a window get a random offset, so the absolute position of a w
 Also data augmentation is used to flip the positions of data points horizontally or vertically.
 
 The beatmap ID of the beatmap where the window came from is provided as a class label.
-This causes the model to learn embeddings of each beatmap in the training data which are somehow discriptive about how objects are placed.
+This causes the model to learn embeddings of each beatmap in the training data which are somehow descriptive about how objects are placed.
 
 ## Sampling
 
