@@ -30,7 +30,7 @@ CLEAN_FILENAME_RX = re.compile(r"[/\\?%*:|\"<>\x7F\x00-\x1F]")
 
 def find_model(ckpt_path):
     assert os.path.isfile(ckpt_path), f"Could not find DiT checkpoint at {ckpt_path}"
-    checkpoint = torch.load(ckpt_path, map_location=lambda storage, loc: storage)
+    checkpoint = torch.load(ckpt_path, map_location=lambda storage, loc: storage, weights_only=False)
     if "ema" in checkpoint:  # supports checkpoints from train.py
         checkpoint = checkpoint["ema"]
     return checkpoint
